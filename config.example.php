@@ -11,7 +11,7 @@
 define('MO_NAME', '');
 
 // Версия приложения
-define('APP_VERSION', '1.0.7');
+define('APP_VERSION', '1.0.8');
 
 // Настройки базы данных
 define('DB_HOST', 'localhost');

@@ -168,14 +168,14 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M15.05 5A5 5 0 0119 8.95M15.05 1A9 9 0 0123 8.94M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72"/>
                 </svg>
-                <span>Вызовы</span>
+                <span>Журнал вызовов</span>
                 <span class="tab-badge hidden" id="badge-registrations">0</span>
             </button>
             <button class="tab-btn" data-tab="active">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                 </svg>
-                <span>Активные</span>
+                <span>Журнал врача</span>
                 <span class="tab-badge hidden" id="badge-active">0</span>
             </button>
             <button class="tab-btn" data-tab="sisters">
@@ -183,7 +183,7 @@
                     <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
                     <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
                 </svg>
-                <span>Журнал сестёр</span>
+                <span>Журнал медсестры</span>
                 <span class="tab-badge hidden" id="badge-sisters">0</span>
             </button>
         </nav>
