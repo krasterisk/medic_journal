@@ -822,7 +822,8 @@ async function confirmCompleteCall() {
     if (result && result.success) {
         closeDiagnozModal();
         closeModal();
-        showToast('✅ Вызов завершён', 'Диагноз: ' + diagnoz);
+        var toastTitle = state.completeTarget.table === 'gdb_active' ? '✅ Назначение завершено' : '✅ Вызов завершён';
+        showToast(toastTitle, 'Диагноз: ' + diagnoz);
         // Refresh current tab
         loadTabData(state.currentTab);
     } else {
