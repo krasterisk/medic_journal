@@ -1,0 +1,23 @@
+# Конфигурация с паролями
+config.php
+
+# Файлы состояния
+last_tg_check.txt
+last_push_check.txt
+
+# Зависимости
+vendor/
+composer.lock
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Логи
+*.log
