@@ -58,6 +58,9 @@ try {
         case 'save_subscription':
             handleSaveSubscription();
             break;
+        case 'complete_call':
+            handleCompleteCall();
+            break;
         default:
             jsonResponse(array('error' => 'Неизвестное действие'), 400);
     }
@@ -207,7 +210,7 @@ function handleGetRegistrations() {
     $limit  = RECORDS_PER_PAGE;
     $offset = ($page - 1) * $limit;
 
-    $stmt = $db->prepare("SELECT * FROM gdb_registrations WHERE {$whereStr} ORDER BY reg_datetime DESC LIMIT {$limit} OFFSET {$offset}");
+    $stmt = $db->prepare("SELECT * FROM gdb_registrations WHERE {$whereStr} ORDER BY CASE WHEN reg_status = '\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043e' THEN 1 ELSE 0 END ASC, reg_datetime ASC LIMIT {$limit} OFFSET {$offset}");
     $stmt->execute($params);
     $records = $stmt->fetchAll();
 
@@ -260,7 +263,7 @@ function handleGetActive() {
     $limit  = RECORDS_PER_PAGE;
     $offset = ($page - 1) * $limit;
 
-    $stmt = $db->prepare("SELECT * FROM gdb_active WHERE {$whereStr} ORDER BY reg_datetime DESC LIMIT {$limit} OFFSET {$offset}");
+    $stmt = $db->prepare("SELECT * FROM gdb_active WHERE {$whereStr} ORDER BY CASE WHEN reg_status = '\u0412\u044b\u043f\u043e\u043b\u043d\u0435\u043d\u043e' THEN 1 ELSE 0 END ASC, reg_datetime ASC LIMIT {$limit} OFFSET {$offset}");
     $stmt->execute($params);
     $records = $stmt->fetchAll();
 
@@ -322,7 +325,7 @@ function handleGetSistersJournal() {
     $limit  = RECORDS_PER_PAGE;
     $offset = ($page - 1) * $limit;
 
-    $stmt = $db->prepare("SELECT * FROM gdb_sisters_journal WHERE {$whereStr} ORDER BY reg_datetime DESC LIMIT {$limit} OFFSET {$offset}");
+    $stmt = $db->prepare("SELECT * FROM gdb_sisters_journal WHERE {$whereStr} ORDER BY CASE WHEN reg_status = 1 THEN 1 ELSE 0 END ASC, reg_datetime ASC LIMIT {$limit} OFFSET {$offset}");
     $stmt->execute($params);
     $records = $stmt->fetchAll();
 
@@ -459,4 +462,48 @@ function handleSaveSubscription() {
     ));
 
     jsonResponse(array('success' => true));
+}
+
+/**
+ * Завершение вызова (установка диагноза и статуса)
+ */
+function handleCompleteCall() {
+    $user = checkAuth();
+    if (!$user) { jsonResponse(array('error' => 'Не авторизован'), 401); }
+
+    // Только врач может завершать вызовы
+    if ($user['level'] != ROLE_DOCTOR) {
+        jsonResponse(array('error' => 'Недостаточно прав'), 403);
+    }
+
+    $regId    = (int)_post('reg_id', 0);
+    $diagnoz  = trim(_post('diagnoz', ''));
+    $table    = _post('table', 'gdb_registrations');
+
+    if (!$regId) {
+        jsonResponse(array('error' => 'Не указан ID записи'), 400);
+    }
+    if ($diagnoz === '') {
+        jsonResponse(array('error' => 'Укажите диагноз'), 400);
+    }
+
+    // Разрешённые таблицы
+    $allowedTables = array('gdb_registrations', 'gdb_active');
+    if (!in_array($table, $allowedTables)) {
+        jsonResponse(array('error' => 'Недопустимая таблица'), 400);
+    }
+
+    $db = getDB();
+    $now = date('Y-m-d H:i:s');
+
+    $stmt = $db->prepare(
+        "UPDATE {$table} SET reg_diagnoz = ?, reg_status = ?, reg_donedate = ? WHERE reg_id = ?"
+    );
+    $stmt->execute(array($diagnoz, 'Выполнено', $now, $regId));
+
+    if ($stmt->rowCount() === 0) {
+        jsonResponse(array('error' => 'Запись не найдена'), 404);
+    }
+
+    jsonResponse(array('success' => true, 'donedate' => $now));
 }

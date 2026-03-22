@@ -55,6 +55,14 @@ const DOM = {
     btnInstall: $('#btn-install'),
     btnDismissInstall: $('#btn-dismiss-install'),
     pollingStatus: $('#polling-status'),
+    modalFooter: $('#modal-footer'),
+    btnCompleteCall: $('#btn-complete-call'),
+    diagnozOverlay: $('#diagnoz-overlay'),
+    diagnozClose: $('#diagnoz-close'),
+    diagnozPatient: $('#diagnoz-patient'),
+    diagnozInput: $('#diagnoz-input'),
+    diagnozError: $('#diagnoz-error'),
+    btnConfirmComplete: $('#btn-confirm-complete'),
 };
 
 // ===================== INITIALIZATION =====================
@@ -115,9 +123,17 @@ function setupEventListeners() {
     
     // Modal
     DOM.modalClose.addEventListener('click', closeModal);
-    DOM.modalOverlay.addEventListener('click', (e) => {
+    DOM.modalOverlay.addEventListener('click', function(e) {
         if (e.target === DOM.modalOverlay) closeModal();
     });
+    
+    // Complete call
+    DOM.btnCompleteCall.addEventListener('click', openDiagnozModal);
+    DOM.diagnozClose.addEventListener('click', closeDiagnozModal);
+    DOM.diagnozOverlay.addEventListener('click', function(e) {
+        if (e.target === DOM.diagnozOverlay) closeDiagnozModal();
+    });
+    DOM.btnConfirmComplete.addEventListener('click', confirmCompleteCall);
     
     // Sound toggle button
     DOM.btnNotifications.addEventListener('click', toggleSoundNotifications);
@@ -396,76 +412,110 @@ function renderRecords(tabName, records) {
     });
 }
 
+function calcAge(dateStr) {
+    if (!dateStr) return '';
+    var d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    var today = new Date();
+    var age = today.getFullYear() - d.getFullYear();
+    var m = today.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+    if (age < 0 || age > 150) return '';
+    // Russian declension
+    var mod10 = age % 10, mod100 = age % 100;
+    var word = 'лет';
+    if (mod10 === 1 && mod100 !== 11) word = 'год';
+    else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) word = 'года';
+    return age + ' ' + word;
+}
+
+function buildAddress(street, dom, kv) {
+    var parts = [];
+    if (street) parts.push(street);
+    if (dom) parts.push('д.' + dom);
+    if (kv) parts.push('кв.' + kv);
+    return parts.join(', ');
+}
+
+function phoneLink(phone) {
+    if (!phone) return '—';
+    var clean = phone.replace(/[^\d+]/g, '');
+    return '<a href="tel:' + clean + '" class="phone-link" onclick="event.stopPropagation()">' + esc(phone) + '</a>';
+}
+
 function renderRegistrationCard(r) {
     const statusClass = getStatusClass(r.reg_status);
     const statusText = r.reg_status || 'Новый';
+    const age = calcAge(r.reg_dateofbirth);
+    const addr = buildAddress(r.reg_address, r.reg_dom, r.reg_kv);
     
     return `
         <div class="record-card" data-id="${r.reg_id}">
             <div class="record-header">
-                <div class="record-fio">${esc(r.reg_fio)}</div>
+                <div class="record-fio">${esc(r.reg_fio)}${age ? ' <span class="record-age">' + age + '</span>' : ''}</div>
                 <div class="record-datetime">${formatDateTime(r.reg_datetime)}</div>
             </div>
             <div class="record-body">
                 <div class="record-field">
-                    <span class="record-label">Телефон</span>
-                    <span class="record-value">${esc(r.reg_phone || '—')}</span>
+                    <span class="record-label">Адрес</span>
+                    <span class="record-value">${esc(addr || '—')}</span>
                 </div>
                 <div class="record-field">
-                    <span class="record-label">Врач</span>
-                    <span class="record-value">${esc(r.reg_doctor || '—')}</span>
+                    <span class="record-label">Контакт</span>
+                    <span class="record-value">${phoneLink(r.reg_phone)}</span>
                 </div>
                 <div class="record-field">
-                    <span class="record-label">Диагноз</span>
-                    <span class="record-value">${esc(r.reg_diagnoz || '—')}</span>
+                    <span class="record-label">Первично/Вторично</span>
+                    <span class="record-value">${esc(r.reg_firsted || '—')}</span>
+                </div>
+                <div class="record-field">
+                    <span class="record-label">Жалобы</span>
+                    <span class="record-value">${esc(r.reg_complaints || '—')}</span>
+                </div>
+                <div class="record-field">
+                    <span class="record-label">Оператор</span>
+                    <span class="record-value">${esc(r.reg_user || '—')}</span>
                 </div>
                 <div class="record-field">
                     <span class="record-label">Статус</span>
                     <span class="record-status ${statusClass}">${esc(statusText)}</span>
-                </div>
-                <div class="record-field">
-                    <span class="record-label">Поликлиника</span>
-                    <span class="record-value">${esc(r.reg_policlinic || '—')}</span>
-                </div>
-                <div class="record-field">
-                    <span class="record-label">Участок</span>
-                    <span class="record-value">${esc(r.reg_areas || '—')}</span>
                 </div>
             </div>
         </div>`;
 }
 
 function renderActiveCard(r) {
+    const statusClass = getStatusClass(r.reg_status);
+    const statusText = r.reg_status || '—';
+    const age = calcAge(r.reg_dateofbirth);
+    const addr = buildAddress(r.reg_street, r.reg_dom, r.reg_kv);
+    
     return `
         <div class="record-card" data-id="${r.reg_id}">
             <div class="record-header">
-                <div class="record-fio">${esc(r.reg_fio)}</div>
+                <div class="record-fio">${esc(r.reg_fio)}${age ? ' <span class="record-age">' + age + '</span>' : ''}</div>
                 <div class="record-datetime">${formatDateTime(r.reg_datetime)}</div>
             </div>
             <div class="record-body">
                 <div class="record-field">
-                    <span class="record-label">Телефон</span>
-                    <span class="record-value">${esc(r.reg_phone || '—')}</span>
+                    <span class="record-label">Адрес</span>
+                    <span class="record-value">${esc(addr || '—')}</span>
                 </div>
                 <div class="record-field">
-                    <span class="record-label">Врач</span>
-                    <span class="record-value">${esc(r.reg_doctor || '—')}</span>
+                    <span class="record-label">Контакт</span>
+                    <span class="record-value">${phoneLink(r.reg_phone)}</span>
                 </div>
                 <div class="record-field">
-                    <span class="record-label">Диагноз</span>
-                    <span class="record-value">${esc(r.reg_diagnoz || '—')}</span>
+                    <span class="record-label">Примечания</span>
+                    <span class="record-value">${esc(r.reg_complaints || r.reg_diagnoz || '—')}</span>
+                </div>
+                <div class="record-field">
+                    <span class="record-label">Оператор</span>
+                    <span class="record-value">${esc(r.reg_user || '—')}</span>
                 </div>
                 <div class="record-field">
                     <span class="record-label">Статус</span>
-                    <span class="record-value">${esc(r.reg_status || '—')}</span>
-                </div>
-                <div class="record-field">
-                    <span class="record-label">Адрес</span>
-                    <span class="record-value">${esc((r.reg_street || '') + ' ' + (r.reg_dom || '') + (r.reg_kv ? ', кв.' + r.reg_kv : ''))}</span>
-                </div>
-                <div class="record-field">
-                    <span class="record-label">Поликлиника</span>
-                    <span class="record-value">${esc(r.reg_policlinic || '—')}</span>
+                    <span class="record-status ${statusClass}">${esc(statusText)}</span>
                 </div>
             </div>
         </div>`;
@@ -474,37 +524,35 @@ function renderActiveCard(r) {
 function renderSisterCard(r) {
     const statusText = r.reg_status == 0 ? 'Не выполнено' : 'Выполнено';
     const statusClass = r.reg_status == 0 ? 'status-waiting' : 'status-done';
+    const age = calcAge(r.reg_dateofbirth);
+    const addr = buildAddress(r.reg_street, r.reg_dom, r.reg_kv);
     
     return `
         <div class="record-card" data-id="${r.reg_id}">
             <div class="record-header">
-                <div class="record-fio">${esc(r.reg_fio)}</div>
+                <div class="record-fio">${esc(r.reg_fio)}${age ? ' <span class="record-age">' + age + '</span>' : ''}</div>
                 <div class="record-datetime">${formatDateTime(r.reg_datetime)}</div>
             </div>
             <div class="record-body">
                 <div class="record-field">
-                    <span class="record-label">Назначение</span>
+                    <span class="record-label">Адрес</span>
+                    <span class="record-value">${esc(addr || '—')}</span>
+                </div>
+                <div class="record-field">
+                    <span class="record-label">Контакт</span>
+                    <span class="record-value">${phoneLink(r.reg_phone)}</span>
+                </div>
+                <div class="record-field">
+                    <span class="record-label">Примечания</span>
                     <span class="record-value">${esc(r.reg_naznach || '—')}</span>
                 </div>
                 <div class="record-field">
-                    <span class="record-label">Сестра</span>
-                    <span class="record-value">${esc(r.reg_sister || '—')}</span>
-                </div>
-                <div class="record-field">
-                    <span class="record-label">Обследование</span>
-                    <span class="record-value">${esc(r.reg_obsledovanie || '—')}</span>
+                    <span class="record-label">Оператор</span>
+                    <span class="record-value">${esc(r.reg_user || r.reg_creator || '—')}</span>
                 </div>
                 <div class="record-field">
                     <span class="record-label">Статус</span>
                     <span class="record-status ${statusClass}">${statusText}</span>
-                </div>
-                <div class="record-field">
-                    <span class="record-label">Адрес</span>
-                    <span class="record-value">${esc((r.reg_street || '') + ' ' + (r.reg_dom || '') + (r.reg_kv ? ', кв.' + r.reg_kv : ''))}</span>
-                </div>
-                <div class="record-field">
-                    <span class="record-label">Телефон</span>
-                    <span class="record-value">${esc(r.reg_phone || '—')}</span>
                 </div>
             </div>
         </div>`;
@@ -603,6 +651,31 @@ function showRecordDetail(tabName, record) {
             </div>`)
         .join('');
     
+    // Show "Complete call" button for doctors on registrations/active tabs
+    // Hide if already completed
+    var showComplete = false;
+    if (state.user && state.user.level === 1 && (tabName === 'registrations' || tabName === 'active')) {
+        var st = String(record.reg_status || '').toLowerCase();
+        if (!st.includes('выполн') && !st.includes('done') && !st.includes('обслуж')) {
+            showComplete = true;
+        }
+    }
+    
+    if (showComplete) {
+        DOM.modalFooter.classList.remove('hidden');
+        // Store current record info for complete action
+        state.completeTarget = {
+            reg_id: record.reg_id,
+            fio: record.reg_fio,
+            table: tabName === 'registrations' ? 'gdb_registrations' : 'gdb_active',
+            tabName: tabName,
+            existingDiagnoz: record.reg_diagnoz || '',
+        };
+    } else {
+        DOM.modalFooter.classList.add('hidden');
+        state.completeTarget = null;
+    }
+    
     DOM.modalOverlay.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
 }
@@ -610,6 +683,65 @@ function showRecordDetail(tabName, record) {
 function closeModal() {
     DOM.modalOverlay.classList.add('hidden');
     document.body.style.overflow = '';
+    state.completeTarget = null;
+}
+
+// ==================== COMPLETE CALL (DIAGNOSIS) ====================
+function openDiagnozModal() {
+    if (!state.completeTarget) return;
+    
+    DOM.diagnozPatient.textContent = state.completeTarget.fio || '';
+    DOM.diagnozInput.value = state.completeTarget.existingDiagnoz || '';
+    DOM.diagnozError.classList.add('hidden');
+    DOM.diagnozOverlay.classList.remove('hidden');
+    
+    setTimeout(function() { DOM.diagnozInput.focus(); }, 200);
+}
+
+function closeDiagnozModal() {
+    DOM.diagnozOverlay.classList.add('hidden');
+    DOM.diagnozInput.value = '';
+    DOM.diagnozError.classList.add('hidden');
+}
+
+async function confirmCompleteCall() {
+    var diagnoz = DOM.diagnozInput.value.trim();
+    
+    if (!diagnoz) {
+        DOM.diagnozError.textContent = 'Заполните поле "Диагноз"';
+        DOM.diagnozError.classList.remove('hidden');
+        DOM.diagnozInput.focus();
+        return;
+    }
+    
+    if (!state.completeTarget) return;
+    
+    // Show loading
+    DOM.btnConfirmComplete.disabled = true;
+    DOM.btnConfirmComplete.querySelector('.btn-text').classList.add('hidden');
+    DOM.btnConfirmComplete.querySelector('.btn-loader').classList.remove('hidden');
+    
+    var result = await apiCall('complete_call', {
+        reg_id: state.completeTarget.reg_id,
+        diagnoz: diagnoz,
+        table: state.completeTarget.table,
+    }, 'POST');
+    
+    // Reset loading
+    DOM.btnConfirmComplete.disabled = false;
+    DOM.btnConfirmComplete.querySelector('.btn-text').classList.remove('hidden');
+    DOM.btnConfirmComplete.querySelector('.btn-loader').classList.add('hidden');
+    
+    if (result && result.success) {
+        closeDiagnozModal();
+        closeModal();
+        showToast('✅ Вызов завершён', 'Диагноз: ' + diagnoz);
+        // Refresh current tab
+        loadTabData(state.currentTab);
+    } else {
+        DOM.diagnozError.textContent = (result && result.error) ? result.error : 'Ошибка сервера';
+        DOM.diagnozError.classList.remove('hidden');
+    }
 }
 
 // ==================== PAGINATION ====================
@@ -986,30 +1118,79 @@ async function requestWakeLock() {
 let deferredInstallPrompt = null;
 
 function setupInstallPrompt() {
-    window.addEventListener('beforeinstallprompt', (e) => {
+    // Check if already installed as standalone
+    var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+    
+    if (isStandalone) return; // Already installed
+    
+    // Chrome/Edge: beforeinstallprompt
+    window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
         deferredInstallPrompt = e;
         DOM.installPrompt.classList.remove('hidden');
     });
     
     if (DOM.btnInstall) {
-        DOM.btnInstall.addEventListener('click', async () => {
+        DOM.btnInstall.addEventListener('click', async function() {
             if (deferredInstallPrompt) {
                 deferredInstallPrompt.prompt();
-                const { outcome } = await deferredInstallPrompt.userChoice;
-                if (outcome === 'accepted') {
+                var result = await deferredInstallPrompt.userChoice;
+                if (result.outcome === 'accepted') {
                     showToast('Установка', 'Приложение установлено! ✓');
                 }
                 deferredInstallPrompt = null;
                 DOM.installPrompt.classList.add('hidden');
+            } else {
+                // Manual instructions for browsers without beforeinstallprompt
+                showManualInstallHint();
             }
         });
     }
     
-    window.addEventListener('appinstalled', () => {
+    if (DOM.btnDismissInstall) {
+        DOM.btnDismissInstall.addEventListener('click', function() {
+            DOM.installPrompt.classList.add('hidden');
+            try { localStorage.setItem('install_dismissed', '1'); } catch(e) {}
+        });
+    }
+    
+    window.addEventListener('appinstalled', function() {
         DOM.installPrompt.classList.add('hidden');
         deferredInstallPrompt = null;
     });
+    
+    // For iOS Safari and HTTP — show manual hint after 5 sec if not dismissed
+    var dismissed = false;
+    try { dismissed = localStorage.getItem('install_dismissed') === '1'; } catch(e) {}
+    
+    if (!dismissed) {
+        var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        var isHTTP = location.protocol === 'http:';
+        
+        if (isIOS || isHTTP) {
+            setTimeout(function() {
+                if (!deferredInstallPrompt && !isStandalone) {
+                    DOM.installPrompt.classList.remove('hidden');
+                    // Update button text for manual flow
+                    if (DOM.btnInstall) {
+                        DOM.btnInstall.textContent = 'Как установить?';
+                    }
+                }
+            }, 5000);
+        }
+    }
+}
+
+function showManualInstallHint() {
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    var msg = '';
+    if (isIOS) {
+        msg = 'Нажмите кнопку «Поделиться» (□↑) внизу экрана Safari, затем «На экран Домой»';
+    } else {
+        msg = 'Откройте меню браузера (⋮), затем «Установить приложение» или «Добавить на главный экран»';
+    }
+    showToast('Установка', msg);
 }
 
 // ==================== SERVICE WORKER ====================

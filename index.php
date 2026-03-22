@@ -241,6 +241,45 @@
                     </button>
                 </div>
                 <div class="modal-body" id="modal-body"></div>
+                <div class="modal-footer hidden" id="modal-footer">
+                    <button class="btn-complete-call" id="btn-complete-call">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20,6 9,17 4,12"/>
+                        </svg>
+                        Завершить вызов
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Diagnosis Modal -->
+        <div class="modal-overlay hidden" id="diagnoz-overlay">
+            <div class="modal-content diagnoz-modal">
+                <div class="modal-header">
+                    <h3>Завершение вызова</h3>
+                    <button class="modal-close" id="diagnoz-close">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="diagnoz-patient" id="diagnoz-patient"></div>
+                    <div class="form-group">
+                        <label for="diagnoz-input">Диагноз <span class="required">*</span></label>
+                        <textarea id="diagnoz-input" rows="3" placeholder="Введите диагноз..."></textarea>
+                    </div>
+                    <div id="diagnoz-error" class="error-message hidden"></div>
+                    <button class="btn-primary btn-confirm-complete" id="btn-confirm-complete">
+                        <span class="btn-text">Подтвердить</span>
+                        <span class="btn-loader hidden">
+                            <svg class="spinner" width="20" height="20" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="40" stroke-dashoffset="10"/>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
             </div>
         </div>
         

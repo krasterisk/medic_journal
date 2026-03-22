@@ -655,6 +655,12 @@ input, select, button, textarea {
     line-height: 1.3;
 }
 
+.record-age {
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
 .record-datetime {
     font-size: 0.75rem;
     color: var(--text-muted);
@@ -688,6 +694,16 @@ input, select, button, textarea {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.phone-link {
+    color: var(--accent-primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.phone-link:hover {
+    text-decoration: underline;
 }
 
 .record-status {
@@ -996,6 +1012,93 @@ input, select, button, textarea {
 
 .modal-field:last-child {
     border-bottom: none;
+}
+
+.modal-footer {
+    padding: 12px 24px 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-complete-call {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: none;
+    border-radius: var(--radius-md);
+    color: #fff;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.btn-complete-call:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.4);
+}
+
+.btn-complete-call:active {
+    transform: translateY(0);
+}
+
+/* Diagnosis Modal */
+.diagnoz-modal {
+    max-width: 480px;
+}
+
+.diagnoz-patient {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.diagnoz-modal .form-group {
+    margin-bottom: 12px;
+}
+
+.diagnoz-modal textarea {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 80px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-sizing: border-box;
+}
+
+.diagnoz-modal textarea:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.diagnoz-modal label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.required {
+    color: var(--danger);
+}
+
+.btn-confirm-complete {
+    width: 100%;
+    margin-top: 8px;
 }
 
 .modal-field-label {

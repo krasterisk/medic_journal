@@ -78,7 +78,7 @@ foreach ($sizes as $size) {
 
 echo "\nDone! Icons generated in {$iconsDir}\n";
 
-function generateSvgIcon(int $size): string {
+function generateSvgIcon($size) {
     $r = $size * 0.2;
     $hw = $size * 0.075;
     $hl = $size * 0.25;
