@@ -744,6 +744,7 @@ input, select, button, textarea {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.03em;
+    width: max-content;
 }
 
 .status-new {
