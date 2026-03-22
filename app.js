@@ -367,6 +367,12 @@ async function loadTabData(tabName, page = null) {
     if (result && result.records) {
         renderRecords(tabName, result.records);
         renderPagination(tabName, result.page, result.pages, result.total);
+        
+        // Update badge with uncompleted count from server
+        if (typeof result.uncompleted !== 'undefined') {
+            state.newCounts[tabName] = result.uncompleted;
+            updateBadges();
+        }
     }
 }
 

@@ -214,11 +214,17 @@ function handleGetRegistrations() {
     $stmt->execute($params);
     $records = $stmt->fetchAll();
 
+    $notCompletedSQL = "NOT ((reg_status LIKE '%выполн%' OR reg_status LIKE '%done%' OR reg_status LIKE '%обслуж%') AND reg_status NOT LIKE '%не выполн%' AND reg_status NOT LIKE '%не обслуж%')";
+    $ucStmt = $db->prepare("SELECT COUNT(*) FROM gdb_registrations WHERE {$whereStr} AND {$notCompletedSQL}");
+    $ucStmt->execute($params);
+    $uncompleted = (int)$ucStmt->fetchColumn();
+
     jsonResponse(array(
         'records' => $records,
         'total'   => $total,
         'page'    => $page,
         'pages'   => (int)ceil($total / $limit),
+        'uncompleted' => $uncompleted,
     ));
 }
 
@@ -267,11 +273,17 @@ function handleGetActive() {
     $stmt->execute($params);
     $records = $stmt->fetchAll();
 
+    $notCompletedSQL = "NOT ((reg_status LIKE '%выполн%' OR reg_status LIKE '%done%' OR reg_status LIKE '%обслуж%') AND reg_status NOT LIKE '%не выполн%' AND reg_status NOT LIKE '%не обслуж%')";
+    $ucStmt = $db->prepare("SELECT COUNT(*) FROM gdb_active WHERE {$whereStr} AND {$notCompletedSQL}");
+    $ucStmt->execute($params);
+    $uncompleted = (int)$ucStmt->fetchColumn();
+
     jsonResponse(array(
         'records' => $records,
         'total'   => $total,
         'page'    => $page,
         'pages'   => (int)ceil($total / $limit),
+        'uncompleted' => $uncompleted,
     ));
 }
 
@@ -329,11 +341,16 @@ function handleGetSistersJournal() {
     $stmt->execute($params);
     $records = $stmt->fetchAll();
 
+    $ucStmt = $db->prepare("SELECT COUNT(*) FROM gdb_sisters_journal WHERE {$whereStr} AND reg_status = 0");
+    $ucStmt->execute($params);
+    $uncompleted = (int)$ucStmt->fetchColumn();
+
     jsonResponse(array(
         'records' => $records,
         'total'   => $total,
         'page'    => $page,
         'pages'   => (int)ceil($total / $limit),
+        'uncompleted' => $uncompleted,
     ));
 }
 
