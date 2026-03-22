@@ -946,9 +946,7 @@ input, select, button, textarea {
 .toast-message {
     font-size: 0.8125rem;
     color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-break: break-word;
 }
 
 /* ==================== Modal ==================== */
