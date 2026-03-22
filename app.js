@@ -517,7 +517,7 @@ function renderRegistrationCard(r) {
                 ` : ''}
             </div>${showComplete ? `
             <div class="record-actions">
-                <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_registrations" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">✅ Завершить вызов</button>
+                <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_registrations" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">Завершить вызов</button>
             </div>` : ''}
         </div>`;
 }
@@ -569,7 +569,7 @@ function renderActiveCard(r) {
                 ` : ''}
             </div>${showComplete ? `
             <div class="record-actions">
-                <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_active" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">✅ Завершить назначение</button>
+                <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_active" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">Завершить назначение</button>
             </div>` : ''}
         </div>`;
 }
