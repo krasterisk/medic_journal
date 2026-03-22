@@ -1,14 +1,15 @@
+<?php require_once __DIR__ . '/config.php'; ?>
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f172a">
-    <meta name="description" content="Меджурнал — система уведомлений для медицинских работников. Вызовы, активные пациенты, журнал сестёр.">
+    <meta name="description" content="<?php echo htmlspecialchars(MO_NAME); ?> — Меджурнал. Система уведомлений для медицинских работников.">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Меджурнал">
-    <title>Меджурнал — Медицинский журнал</title>
+    <title><?php echo htmlspecialchars(MO_NAME); ?> — Меджурнал</title>
     
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" sizes="192x192" href="icon.php?size=192">
@@ -38,7 +39,7 @@
                     </svg>
                 </div>
                 <h1>Меджурнал</h1>
-                <p class="login-subtitle">Медицинский журнал вызовов</p>
+                <p class="login-subtitle"><?php echo htmlspecialchars(MO_NAME); ?></p>
             </div>
             
             <form id="login-form" autocomplete="off">
@@ -113,7 +114,7 @@
                     </svg>
                 </div>
                 <div class="header-info">
-                    <span class="header-title">Меджурнал</span>
+                    <span class="header-title"><?php echo htmlspecialchars(MO_NAME); ?></span>
                     <span class="header-user" id="header-user-name"></span>
                 </div>
             </div>
@@ -253,7 +254,7 @@
                 </svg>
                 <div>
                     <strong>Установить приложение</strong>
-                    <p>Добавьте Меджурнал на домашний экран для быстрого доступа</p>
+                    <p>Добавьте приложение на домашний экран для быстрого доступа</p>
                 </div>
                 <button class="btn-install" id="btn-install">Установить</button>
                 <button class="btn-dismiss" id="btn-dismiss-install">&times;</button>
@@ -267,6 +268,7 @@
         </div>
     </div>
     
+    <script>window.MO_NAME = <?php echo json_encode(MO_NAME, JSON_UNESCAPED_UNICODE); ?>;</script>
     <script src="app.js"></script>
 </body>
 </html>

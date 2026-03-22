@@ -17,7 +17,7 @@ const state = {
     newCounts: { registrations: 0, active: 0, sisters: 0 },
     soundEnabled: true,
     titleBlinking: false,
-    originalTitle: 'Меджурнал',
+    originalTitle: (window.MO_NAME || 'Меджурнал') + ' — Меджурнал',
     keepAliveTimer: null,
 };
 

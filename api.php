@@ -1,14 +1,33 @@
 <?php
 /**
  * API endpoint для Меджурнал PWA
- * Обрабатывает все AJAX запросы
+ * Совместимость: PHP 5.5+
  */
+
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Ловим фатальные ошибки PHP и отдаём как JSON
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR))) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
+        }
+        echo json_encode(array(
+            'error' => 'PHP Fatal: ' . $error['message'],
+            'file'  => basename($error['file']) . ':' . $error['line'],
+        ), JSON_UNESCAPED_UNICODE);
+    }
+});
 
 require_once __DIR__ . '/config.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
+$action = isset($_GET['action']) ? $_GET['action'] : (isset($_POST['action']) ? $_POST['action'] : '');
 
 try {
     switch ($action) {
@@ -40,395 +59,345 @@ try {
             handleSaveSubscription();
             break;
         default:
-            jsonResponse(['error' => 'Неизвестное действие'], 400);
+            jsonResponse(array('error' => 'Неизвестное действие'), 400);
     }
 } catch (Exception $e) {
-    jsonResponse(['error' => 'Ошибка сервера: ' . $e->getMessage()], 500);
+    jsonResponse(array(
+        'error' => 'Ошибка сервера: ' . $e->getMessage(),
+        'code'  => $e->getCode(),
+        'trace' => basename($e->getFile()) . ':' . $e->getLine(),
+    ), 500);
 }
 
-/**
- * Получить пользователей по роли
- */
-function handleGetUsersByRole(): void {
-    $role = (int)($_GET['role'] ?? 0);
-    
-    $allowedRoles = [ROLE_DOCTOR, ROLE_SISTER, ROLE_NURSE];
+// ====================== HELPER ======================
+function _get($key, $default = '') {
+    return isset($_GET[$key]) ? $_GET[$key] : $default;
+}
+function _post($key, $default = '') {
+    return isset($_POST[$key]) ? $_POST[$key] : $default;
+}
+function _arr($arr, $key, $default = '') {
+    return isset($arr[$key]) ? $arr[$key] : $default;
+}
+
+// ====================== HANDLERS ======================
+
+function handleGetUsersByRole() {
+    $role = (int)_get('role', 0);
+
+    $allowedRoles = array(ROLE_DOCTOR, ROLE_SISTER, ROLE_NURSE);
     if (!in_array($role, $allowedRoles)) {
-        jsonResponse(['error' => 'Недопустимая роль'], 400);
+        jsonResponse(array('error' => 'Недопустимая роль'), 400);
     }
-    
+
     $db = getDB();
     $stmt = $db->prepare('SELECT id, fio, policlinic FROM gdb_users WHERE level = ? ORDER BY fio ASC');
-    $stmt->execute([$role]);
+    $stmt->execute(array($role));
     $users = $stmt->fetchAll();
-    
-    jsonResponse(['users' => $users]);
+
+    jsonResponse(array('users' => $users));
 }
 
-/**
- * Авторизация
- */
-function handleLogin(): void {
-    $userId = (int)($_POST['user_id'] ?? 0);
-    $password = $_POST['password'] ?? '';
-    
+function handleLogin() {
+    $userId   = (int)_post('user_id', 0);
+    $password = _post('password', '');
+
     if (!$userId || !$password) {
-        jsonResponse(['error' => 'Укажите пользователя и пароль'], 400);
+        jsonResponse(array('error' => 'Укажите пользователя и пароль'), 400);
     }
-    
+
     $db = getDB();
     $stmt = $db->prepare('SELECT * FROM gdb_users WHERE id = ?');
-    $stmt->execute([$userId]);
+    $stmt->execute(array($userId));
     $user = $stmt->fetch();
-    
+
     if (!$user) {
-        jsonResponse(['error' => 'Пользователь не найден'], 404);
+        jsonResponse(array('error' => 'Пользователь не найден'), 404);
     }
-    
-    // Пароль хранится в открытом виде
+
     if ($user['password'] !== $password) {
-        jsonResponse(['error' => 'Неверный пароль'], 401);
+        jsonResponse(array('error' => 'Неверный пароль'), 401);
     }
-    
-    // Проверяем что роль допустима
-    $allowedRoles = [ROLE_DOCTOR, ROLE_SISTER, ROLE_NURSE];
+
+    $allowedRoles = array(ROLE_DOCTOR, ROLE_SISTER, ROLE_NURSE);
     if (!in_array((int)$user['level'], $allowedRoles)) {
-        jsonResponse(['error' => 'Данная роль не поддерживается в этом приложении'], 403);
+        jsonResponse(array('error' => 'Данная роль не поддерживается'), 403);
     }
-    
+
     setAuth($user);
-    
+
     global $ROLE_NAMES;
-    jsonResponse([
+    $roleName = isset($ROLE_NAMES[(int)$user['level']]) ? $ROLE_NAMES[(int)$user['level']] : 'Неизвестно';
+
+    jsonResponse(array(
         'success' => true,
-        'user' => [
+        'user' => array(
             'id'         => $user['id'],
             'fio'        => $user['fio'],
             'level'      => (int)$user['level'],
-            'role_name'  => $ROLE_NAMES[(int)$user['level']] ?? 'Неизвестно',
+            'role_name'  => $roleName,
             'policlinic' => $user['policlinic'],
-            'area'       => $user['area'],
-        ]
-    ]);
+            'area'       => _arr($user, 'area', ''),
+        )
+    ));
 }
 
-/**
- * Выход
- */
-function handleLogout(): void {
+function handleLogout() {
     logout();
-    jsonResponse(['success' => true]);
+    jsonResponse(array('success' => true));
 }
 
-/**
- * Проверка авторизации
- */
-function handleCheckAuth(): void {
+function handleCheckAuth() {
     $user = checkAuth();
     if ($user) {
         global $ROLE_NAMES;
-        jsonResponse([
+        $roleName = isset($ROLE_NAMES[$user['level']]) ? $ROLE_NAMES[$user['level']] : 'Неизвестно';
+        jsonResponse(array(
             'authenticated' => true,
-            'user' => array_merge($user, [
-                'role_name' => $ROLE_NAMES[$user['level']] ?? 'Неизвестно'
-            ])
-        ]);
+            'user' => array_merge($user, array('role_name' => $roleName))
+        ));
     } else {
-        jsonResponse(['authenticated' => false]);
+        jsonResponse(array('authenticated' => false));
     }
 }
 
-/**
- * Получить записи из gdb_registrations
- */
-function handleGetRegistrations(): void {
+function handleGetRegistrations() {
     $user = checkAuth();
-    if (!$user) {
-        jsonResponse(['error' => 'Не авторизован'], 401);
-    }
-    
+    if (!$user) { jsonResponse(array('error' => 'Не авторизован'), 401); }
+
     $db = getDB();
-    $params = [];
-    $where = ['1=1'];
-    
-    // Фильтр по дате
-    $dateFrom = $_GET['date_from'] ?? date('Y-m-d');
-    $dateTo   = $_GET['date_to'] ?? date('Y-m-d');
+    $params = array();
+    $where = array('1=1');
+
+    $dateFrom = _get('date_from', date('Y-m-d'));
+    $dateTo   = _get('date_to', date('Y-m-d'));
     $where[] = 'DATE(reg_datetime) BETWEEN ? AND ?';
     $params[] = $dateFrom;
     $params[] = $dateTo;
-    
-    // Фильтр по врачу (для уровня Врач)
+
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = $user['doctor'] ?? $user['fio'];
+        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
         $where[] = 'reg_doctor LIKE ?';
         $params[] = '%' . $doctorName . '%';
     }
-    
-    // Фильтр по поликлинике
+
     if (!empty($user['policlinic'])) {
         $where[] = 'reg_policlinic IN (' . $user['policlinic'] . ')';
     }
-    
-    // Текстовый фильтр
-    if (!empty($_GET['search'])) {
-        $search = '%' . $_GET['search'] . '%';
+
+    $search = _get('search', '');
+    if ($search !== '') {
+        $s = '%' . $search . '%';
         $where[] = '(reg_fio LIKE ? OR reg_phone LIKE ? OR reg_diagnoz LIKE ? OR reg_doctor LIKE ?)';
-        $params[] = $search;
-        $params[] = $search;
-        $params[] = $search;
-        $params[] = $search;
+        $params[] = $s; $params[] = $s; $params[] = $s; $params[] = $s;
     }
-    
-    // Фильтр по статусу
+
     if (isset($_GET['status']) && $_GET['status'] !== '') {
         $where[] = 'reg_status = ?';
         $params[] = $_GET['status'];
     }
-    
+
     $whereStr = implode(' AND ', $where);
-    
-    // Подсчёт общего количества
+
     $countStmt = $db->prepare("SELECT COUNT(*) FROM gdb_registrations WHERE {$whereStr}");
     $countStmt->execute($params);
     $total = (int)$countStmt->fetchColumn();
-    
-    // Пагинация
-    $page = max(1, (int)($_GET['page'] ?? 1));
-    $limit = RECORDS_PER_PAGE;
+
+    $page   = max(1, (int)_get('page', 1));
+    $limit  = RECORDS_PER_PAGE;
     $offset = ($page - 1) * $limit;
-    
+
     $stmt = $db->prepare("SELECT * FROM gdb_registrations WHERE {$whereStr} ORDER BY reg_datetime DESC LIMIT {$limit} OFFSET {$offset}");
     $stmt->execute($params);
     $records = $stmt->fetchAll();
-    
-    jsonResponse([
+
+    jsonResponse(array(
         'records' => $records,
         'total'   => $total,
         'page'    => $page,
-        'pages'   => ceil($total / $limit),
-    ]);
+        'pages'   => (int)ceil($total / $limit),
+    ));
 }
 
-/**
- * Получить записи из gdb_active
- */
-function handleGetActive(): void {
+function handleGetActive() {
     $user = checkAuth();
-    if (!$user) {
-        jsonResponse(['error' => 'Не авторизован'], 401);
-    }
-    
+    if (!$user) { jsonResponse(array('error' => 'Не авторизован'), 401); }
+
     $db = getDB();
-    $params = [];
-    $where = ['1=1'];
-    
-    // Фильтр по дате
-    $dateFrom = $_GET['date_from'] ?? date('Y-m-d');
-    $dateTo   = $_GET['date_to'] ?? date('Y-m-d');
+    $params = array();
+    $where = array('1=1');
+
+    $dateFrom = _get('date_from', date('Y-m-d'));
+    $dateTo   = _get('date_to', date('Y-m-d'));
     $where[] = 'DATE(reg_datetime) BETWEEN ? AND ?';
     $params[] = $dateFrom;
     $params[] = $dateTo;
-    
-    // Фильтр по врачу
+
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = $user['doctor'] ?? $user['fio'];
+        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
         $where[] = 'reg_doctor LIKE ?';
         $params[] = '%' . $doctorName . '%';
     }
-    
-    // Фильтр по создателю (для оператора/регистратора)
-    // Для сестры — не фильтруем по доктору, но по создателю
-    
-    // Фильтр по поликлинике
+
     if (!empty($user['policlinic'])) {
         $where[] = 'reg_policlinic IN (' . $user['policlinic'] . ')';
     }
-    
-    // Текстовый фильтр
-    if (!empty($_GET['search'])) {
-        $search = '%' . $_GET['search'] . '%';
+
+    $search = _get('search', '');
+    if ($search !== '') {
+        $s = '%' . $search . '%';
         $where[] = '(reg_fio LIKE ? OR reg_diagnoz LIKE ? OR reg_doctor LIKE ?)';
-        $params[] = $search;
-        $params[] = $search;
-        $params[] = $search;
+        $params[] = $s; $params[] = $s; $params[] = $s;
     }
-    
+
     $whereStr = implode(' AND ', $where);
-    
-    // Подсчёт
+
     $countStmt = $db->prepare("SELECT COUNT(*) FROM gdb_active WHERE {$whereStr}");
     $countStmt->execute($params);
     $total = (int)$countStmt->fetchColumn();
-    
-    // Пагинация
-    $page = max(1, (int)($_GET['page'] ?? 1));
-    $limit = RECORDS_PER_PAGE;
+
+    $page   = max(1, (int)_get('page', 1));
+    $limit  = RECORDS_PER_PAGE;
     $offset = ($page - 1) * $limit;
-    
+
     $stmt = $db->prepare("SELECT * FROM gdb_active WHERE {$whereStr} ORDER BY reg_datetime DESC LIMIT {$limit} OFFSET {$offset}");
     $stmt->execute($params);
     $records = $stmt->fetchAll();
-    
-    jsonResponse([
+
+    jsonResponse(array(
         'records' => $records,
         'total'   => $total,
         'page'    => $page,
-        'pages'   => ceil($total / $limit),
-    ]);
+        'pages'   => (int)ceil($total / $limit),
+    ));
 }
 
-/**
- * Получить записи из gdb_sisters_journal
- */
-function handleGetSistersJournal(): void {
+function handleGetSistersJournal() {
     $user = checkAuth();
-    if (!$user) {
-        jsonResponse(['error' => 'Не авторизован'], 401);
-    }
-    
+    if (!$user) { jsonResponse(array('error' => 'Не авторизован'), 401); }
+
     $db = getDB();
-    $params = [];
-    $where = ['1=1'];
-    
-    // Фильтр по дате
-    $dateFrom = $_GET['date_from'] ?? date('Y-m-d');
-    $dateTo   = $_GET['date_to'] ?? date('Y-m-d');
+    $params = array();
+    $where = array('1=1');
+
+    $dateFrom = _get('date_from', date('Y-m-d'));
+    $dateTo   = _get('date_to', date('Y-m-d'));
     $where[] = 'DATE(reg_datetime) BETWEEN ? AND ?';
     $params[] = $dateFrom;
     $params[] = $dateTo;
-    
-    // Фильтр по сестре (для участковой сестры)
+
     if ($user['level'] == ROLE_SISTER) {
         $where[] = 'reg_sister LIKE ?';
         $params[] = '%' . $user['fio'] . '%';
     }
-    
-    // Фильтр по врачу (для врача — по reg_creator или другому полю)
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = $user['doctor'] ?? $user['fio'];
+        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
         $where[] = '(reg_creator LIKE ? OR reg_user LIKE ?)';
         $params[] = '%' . $doctorName . '%';
         $params[] = '%' . $doctorName . '%';
     }
-    
-    // Фильтр по поликлинике
+
     if (!empty($user['policlinic'])) {
         $where[] = 'reg_policlinic IN (' . $user['policlinic'] . ')';
     }
-    
-    // Для участковой сестры — только невыполненные
+
     if ($user['level'] == ROLE_SISTER) {
         $where[] = 'reg_status = 0';
     }
-    
-    // Текстовый фильтр
-    if (!empty($_GET['search'])) {
-        $search = '%' . $_GET['search'] . '%';
+
+    $search = _get('search', '');
+    if ($search !== '') {
+        $s = '%' . $search . '%';
         $where[] = '(reg_fio LIKE ? OR reg_sister LIKE ? OR reg_naznach LIKE ?)';
-        $params[] = $search;
-        $params[] = $search;
-        $params[] = $search;
+        $params[] = $s; $params[] = $s; $params[] = $s;
     }
-    
+
     $whereStr = implode(' AND ', $where);
-    
-    // Подсчёт
+
     $countStmt = $db->prepare("SELECT COUNT(*) FROM gdb_sisters_journal WHERE {$whereStr}");
     $countStmt->execute($params);
     $total = (int)$countStmt->fetchColumn();
-    
-    // Пагинация
-    $page = max(1, (int)($_GET['page'] ?? 1));
-    $limit = RECORDS_PER_PAGE;
+
+    $page   = max(1, (int)_get('page', 1));
+    $limit  = RECORDS_PER_PAGE;
     $offset = ($page - 1) * $limit;
-    
+
     $stmt = $db->prepare("SELECT * FROM gdb_sisters_journal WHERE {$whereStr} ORDER BY reg_datetime DESC LIMIT {$limit} OFFSET {$offset}");
     $stmt->execute($params);
     $records = $stmt->fetchAll();
-    
-    jsonResponse([
+
+    jsonResponse(array(
         'records' => $records,
         'total'   => $total,
         'page'    => $page,
-        'pages'   => ceil($total / $limit),
-    ]);
+        'pages'   => (int)ceil($total / $limit),
+    ));
 }
 
-/**
- * Polling для проверки новых записей
- */
-function handlePollNew(): void {
+function handlePollNew() {
     $user = checkAuth();
-    if (!$user) {
-        jsonResponse(['error' => 'Не авторизован'], 401);
-    }
-    
-    $lastCheckTime = $_GET['last_check'] ?? date('Y-m-d H:i:s', strtotime('-1 minute'));
-    
+    if (!$user) { jsonResponse(array('error' => 'Не авторизован'), 401); }
+
+    $lastCheckTime = _get('last_check', date('Y-m-d H:i:s', strtotime('-1 minute')));
+
     $db = getDB();
-    $results = [
+    $results = array(
         'registrations' => 0,
         'active'        => 0,
         'sisters'       => 0,
-        'new_records'   => [],
-    ];
-    
-    // Проверяем gdb_registrations
-    $regWhere = "reg_datetime > ?";
-    $regParams = [$lastCheckTime];
-    
+        'new_records'   => array(),
+    );
+
+    // gdb_registrations
+    $regWhere  = "reg_datetime > ?";
+    $regParams = array($lastCheckTime);
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = $user['doctor'] ?? $user['fio'];
+        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
         $regWhere .= " AND reg_doctor LIKE ?";
         $regParams[] = '%' . $doctorName . '%';
     }
     if (!empty($user['policlinic'])) {
         $regWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
     }
-    
     $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_registrations WHERE {$regWhere}");
     $stmt->execute($regParams);
     $results['registrations'] = (int)$stmt->fetchColumn();
-    
+
     if ($results['registrations'] > 0) {
         $stmt = $db->prepare("SELECT reg_id, reg_fio, reg_phone, reg_datetime, reg_diagnoz FROM gdb_registrations WHERE {$regWhere} ORDER BY reg_datetime DESC LIMIT 5");
         $stmt->execute($regParams);
         $results['new_records']['registrations'] = $stmt->fetchAll();
     }
-    
-    // Проверяем gdb_active
-    $actWhere = "reg_datetime > ?";
-    $actParams = [$lastCheckTime];
-    
+
+    // gdb_active
+    $actWhere  = "reg_datetime > ?";
+    $actParams = array($lastCheckTime);
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = $user['doctor'] ?? $user['fio'];
+        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
         $actWhere .= " AND reg_doctor LIKE ?";
         $actParams[] = '%' . $doctorName . '%';
     }
     if (!empty($user['policlinic'])) {
         $actWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
     }
-    
     $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_active WHERE {$actWhere}");
     $stmt->execute($actParams);
     $results['active'] = (int)$stmt->fetchColumn();
-    
+
     if ($results['active'] > 0) {
         $stmt = $db->prepare("SELECT reg_id, reg_fio, reg_datetime, reg_diagnoz FROM gdb_active WHERE {$actWhere} ORDER BY reg_datetime DESC LIMIT 5");
         $stmt->execute($actParams);
         $results['new_records']['active'] = $stmt->fetchAll();
     }
-    
-    // Проверяем gdb_sisters_journal
-    $sisWhere = "reg_datetime > ?";
-    $sisParams = [$lastCheckTime];
-    
+
+    // gdb_sisters_journal
+    $sisWhere  = "reg_datetime > ?";
+    $sisParams = array($lastCheckTime);
     if ($user['level'] == ROLE_SISTER) {
         $sisWhere .= " AND reg_sister LIKE ?";
         $sisParams[] = '%' . $user['fio'] . '%';
     } elseif ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = $user['doctor'] ?? $user['fio'];
+        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
         $sisWhere .= " AND (reg_creator LIKE ? OR reg_user LIKE ?)";
         $sisParams[] = '%' . $doctorName . '%';
         $sisParams[] = '%' . $doctorName . '%';
@@ -436,42 +405,35 @@ function handlePollNew(): void {
     if (!empty($user['policlinic'])) {
         $sisWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
     }
-    
     $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_sisters_journal WHERE {$sisWhere}");
     $stmt->execute($sisParams);
     $results['sisters'] = (int)$stmt->fetchColumn();
-    
+
     if ($results['sisters'] > 0) {
         $stmt = $db->prepare("SELECT reg_id, reg_fio, reg_datetime, reg_naznach FROM gdb_sisters_journal WHERE {$sisWhere} ORDER BY reg_datetime DESC LIMIT 5");
         $stmt->execute($sisParams);
         $results['new_records']['sisters'] = $stmt->fetchAll();
     }
-    
+
     $results['server_time'] = date('Y-m-d H:i:s');
     $results['has_new'] = ($results['registrations'] + $results['active'] + $results['sisters']) > 0;
-    
+
     jsonResponse($results);
 }
 
-/**
- * Сохранение Push-подписки
- */
-function handleSaveSubscription(): void {
+function handleSaveSubscription() {
     $user = checkAuth();
-    if (!$user) {
-        jsonResponse(['error' => 'Не авторизован'], 401);
-    }
-    
+    if (!$user) { jsonResponse(array('error' => 'Не авторизован'), 401); }
+
     $input = json_decode(file_get_contents('php://input'), true);
-    $subscription = $input['subscription'] ?? null;
-    
+    $subscription = isset($input['subscription']) ? $input['subscription'] : null;
+
     if (!$subscription) {
-        jsonResponse(['error' => 'Нет данных подписки'], 400);
+        jsonResponse(array('error' => 'Нет данных подписки'), 400);
     }
-    
+
     $db = getDB();
-    
-    // Создаём таблицу для push подписок, если не существует
+
     $db->exec("CREATE TABLE IF NOT EXISTS gdb_push_subscriptions (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
@@ -481,19 +443,20 @@ function handleSaveSubscription(): void {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY user_id (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci");
-    
-    // Удаляем старые подписки этого пользователя
+
     $stmt = $db->prepare("DELETE FROM gdb_push_subscriptions WHERE user_id = ?");
-    $stmt->execute([$user['id']]);
-    
-    // Сохраняем новую подписку
+    $stmt->execute(array($user['id']));
+
+    $p256dh = isset($subscription['keys']['p256dh']) ? $subscription['keys']['p256dh'] : '';
+    $auth   = isset($subscription['keys']['auth'])   ? $subscription['keys']['auth']   : '';
+
     $stmt = $db->prepare("INSERT INTO gdb_push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)");
-    $stmt->execute([
+    $stmt->execute(array(
         $user['id'],
         $subscription['endpoint'],
-        $subscription['keys']['p256dh'] ?? '',
-        $subscription['keys']['auth'] ?? '',
-    ]);
-    
-    jsonResponse(['success' => true]);
+        $p256dh,
+        $auth,
+    ));
+
+    jsonResponse(array('success' => true));
 }
