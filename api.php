@@ -343,92 +343,98 @@ function handlePollNew() {
 
     $db = getDB();
 
-    $lastCheckTime = _get('last_check');
-    if (!$lastCheckTime) {
-        $stmt = $db->query("SELECT DATE_SUB(NOW(), INTERVAL 1 MINUTE)");
-        $lastCheckTime = $stmt->fetchColumn();
-    }
+    $lastReg = (int)_get('registrations', 0);
+    $lastAct = (int)_get('active', 0);
+    $lastSis = (int)_get('sisters', 0);
+
     $results = array(
         'registrations' => 0,
         'active'        => 0,
         'sisters'       => 0,
         'new_records'   => array(),
+        'max_ids'       => array(
+            'registrations' => (int)$db->query("SELECT MAX(reg_id) FROM gdb_registrations")->fetchColumn(),
+            'active'        => (int)$db->query("SELECT MAX(reg_id) FROM gdb_active")->fetchColumn(),
+            'sisters'       => (int)$db->query("SELECT MAX(reg_id) FROM gdb_sisters_journal")->fetchColumn()
+        )
     );
 
     // Условие невыполненного вызова: НЕ (содержит "выполн" и не содержит "не выполн")
     $notCompletedSQL = "NOT ((reg_status LIKE '%выполн%' OR reg_status LIKE '%done%' OR reg_status LIKE '%обслуж%') AND reg_status NOT LIKE '%не выполн%' AND reg_status NOT LIKE '%не обслуж%')";
 
     // gdb_registrations
-    $regWhere  = "reg_datetime > ? AND {$notCompletedSQL}";
-    $regParams = array($lastCheckTime);
-    if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-        $regWhere .= " AND reg_doctor LIKE ?";
-        $regParams[] = '%' . $doctorName . '%';
-    }
-    if (!empty($user['policlinic'])) {
-        $regWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
-    }
-    $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_registrations WHERE {$regWhere}");
-    $stmt->execute($regParams);
-    $results['registrations'] = (int)$stmt->fetchColumn();
-
-    if ($results['registrations'] > 0) {
-        $stmt = $db->prepare("SELECT reg_id, reg_fio, reg_phone, reg_datetime, reg_diagnoz FROM gdb_registrations WHERE {$regWhere} ORDER BY reg_datetime DESC LIMIT 5");
+    if ($lastReg > 0) {
+        $regWhere  = "reg_id > ? AND reg_id <= ? AND {$notCompletedSQL}";
+        $regParams = array($lastReg, $results['max_ids']['registrations']);
+        if ($user['level'] == ROLE_DOCTOR) {
+            $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
+            $regWhere .= " AND reg_doctor LIKE ?";
+            $regParams[] = '%' . $doctorName . '%';
+        }
+        if (!empty($user['policlinic'])) {
+            $regWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+        }
+        $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_registrations WHERE {$regWhere}");
         $stmt->execute($regParams);
-        $results['new_records']['registrations'] = $stmt->fetchAll();
+        $results['registrations'] = (int)$stmt->fetchColumn();
+
+        if ($results['registrations'] > 0) {
+            $stmt = $db->prepare("SELECT reg_id, reg_fio, reg_phone, reg_datetime, reg_diagnoz FROM gdb_registrations WHERE {$regWhere} ORDER BY reg_id DESC LIMIT 5");
+            $stmt->execute($regParams);
+            $results['new_records']['registrations'] = $stmt->fetchAll();
+        }
     }
 
     // gdb_active
-    $actWhere  = "reg_datetime > ? AND {$notCompletedSQL}";
-    $actParams = array($lastCheckTime);
-    if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-        $actWhere .= " AND reg_doctor LIKE ?";
-        $actParams[] = '%' . $doctorName . '%';
-    }
-    if (!empty($user['policlinic'])) {
-        $actWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
-    }
-    $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_active WHERE {$actWhere}");
-    $stmt->execute($actParams);
-    $results['active'] = (int)$stmt->fetchColumn();
-
-    if ($results['active'] > 0) {
-        $stmt = $db->prepare("SELECT reg_id, reg_fio, reg_datetime, reg_diagnoz FROM gdb_active WHERE {$actWhere} ORDER BY reg_datetime DESC LIMIT 5");
+    if ($lastAct > 0) {
+        $actWhere  = "reg_id > ? AND reg_id <= ? AND {$notCompletedSQL}";
+        $actParams = array($lastAct, $results['max_ids']['active']);
+        if ($user['level'] == ROLE_DOCTOR) {
+            $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
+            $actWhere .= " AND reg_doctor LIKE ?";
+            $actParams[] = '%' . $doctorName . '%';
+        }
+        if (!empty($user['policlinic'])) {
+            $actWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+        }
+        $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_active WHERE {$actWhere}");
         $stmt->execute($actParams);
-        $results['new_records']['active'] = $stmt->fetchAll();
+        $results['active'] = (int)$stmt->fetchColumn();
+
+        if ($results['active'] > 0) {
+            $stmt = $db->prepare("SELECT reg_id, reg_fio, reg_datetime, reg_diagnoz FROM gdb_active WHERE {$actWhere} ORDER BY reg_id DESC LIMIT 5");
+            $stmt->execute($actParams);
+            $results['new_records']['active'] = $stmt->fetchAll();
+        }
     }
 
     // gdb_sisters_journal
-    $sisWhere  = "reg_datetime > ? AND reg_status = 0";
-    $sisParams = array($lastCheckTime);
-    if ($user['level'] == ROLE_SISTER) {
-        $sisWhere .= " AND reg_sister LIKE ?";
-        $sisParams[] = '%' . $user['fio'] . '%';
-    } elseif ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-        $sisWhere .= " AND (reg_creator LIKE ? OR reg_user LIKE ?)";
-        $sisParams[] = '%' . $doctorName . '%';
-        $sisParams[] = '%' . $doctorName . '%';
-    }
-    if (!empty($user['policlinic'])) {
-        $sisWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
-    }
-    $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_sisters_journal WHERE {$sisWhere}");
-    $stmt->execute($sisParams);
-    $results['sisters'] = (int)$stmt->fetchColumn();
-
-    if ($results['sisters'] > 0) {
-        $stmt = $db->prepare("SELECT reg_id, reg_fio, reg_datetime, reg_naznach FROM gdb_sisters_journal WHERE {$sisWhere} ORDER BY reg_datetime DESC LIMIT 5");
+    if ($lastSis > 0) {
+        $sisWhere  = "reg_id > ? AND reg_id <= ? AND reg_status = 0";
+        $sisParams = array($lastSis, $results['max_ids']['sisters']);
+        if ($user['level'] == ROLE_SISTER) {
+            $sisWhere .= " AND reg_sister LIKE ?";
+            $sisParams[] = '%' . $user['fio'] . '%';
+        } elseif ($user['level'] == ROLE_DOCTOR) {
+            $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
+            $sisWhere .= " AND (reg_creator LIKE ? OR reg_user LIKE ?)";
+            $sisParams[] = '%' . $doctorName . '%';
+            $sisParams[] = '%' . $doctorName . '%';
+        }
+        if (!empty($user['policlinic'])) {
+            $sisWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+        }
+        $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_sisters_journal WHERE {$sisWhere}");
         $stmt->execute($sisParams);
-        $results['new_records']['sisters'] = $stmt->fetchAll();
+        $results['sisters'] = (int)$stmt->fetchColumn();
+
+        if ($results['sisters'] > 0) {
+            $stmt = $db->prepare("SELECT reg_id, reg_fio, reg_datetime, reg_naznach FROM gdb_sisters_journal WHERE {$sisWhere} ORDER BY reg_id DESC LIMIT 5");
+            $stmt->execute($sisParams);
+            $results['new_records']['sisters'] = $stmt->fetchAll();
+        }
     }
 
-    $stmt = $db->query("SELECT NOW()");
-    $dbNow = $stmt->fetchColumn();
-    
-    $results['server_time'] = $dbNow ? $dbNow : date('Y-m-d H:i:s');
     $results['has_new'] = ($results['registrations'] + $results['active'] + $results['sisters']) > 0;
 
     jsonResponse($results);
