@@ -351,8 +351,11 @@ function handlePollNew() {
         'new_records'   => array(),
     );
 
+    // Условие невыполненного вызова: НЕ (содержит "выполн" и не содержит "не выполн")
+    $notCompletedSQL = "NOT ((reg_status LIKE '%выполн%' OR reg_status LIKE '%done%' OR reg_status LIKE '%обслуж%') AND reg_status NOT LIKE '%не выполн%' AND reg_status NOT LIKE '%не обслуж%')";
+
     // gdb_registrations
-    $regWhere  = "reg_datetime > ?";
+    $regWhere  = "reg_datetime > ? AND {$notCompletedSQL}";
     $regParams = array($lastCheckTime);
     if ($user['level'] == ROLE_DOCTOR) {
         $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
@@ -373,7 +376,7 @@ function handlePollNew() {
     }
 
     // gdb_active
-    $actWhere  = "reg_datetime > ?";
+    $actWhere  = "reg_datetime > ? AND {$notCompletedSQL}";
     $actParams = array($lastCheckTime);
     if ($user['level'] == ROLE_DOCTOR) {
         $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
@@ -394,7 +397,7 @@ function handlePollNew() {
     }
 
     // gdb_sisters_journal
-    $sisWhere  = "reg_datetime > ?";
+    $sisWhere  = "reg_datetime > ? AND reg_status = 0";
     $sisParams = array($lastCheckTime);
     if ($user['level'] == ROLE_SISTER) {
         $sisWhere .= " AND reg_sister LIKE ?";
