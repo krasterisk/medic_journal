@@ -4,7 +4,7 @@
  * Использование: icon.php?size=192
  */
 
-$size = max(16, min(512, (int)($_GET['size'] ?? 192)));
+$size = max(16, min(512, (int)(isset($_GET['size']) ? $_GET['size'] : 192)));
 
 header('Content-Type: image/svg+xml');
 header('Cache-Control: public, max-age=31536000');

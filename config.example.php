@@ -10,6 +10,9 @@
 // Наименование медицинской организации
 define('MO_NAME', '');
 
+// Версия приложения
+define('APP_VERSION', '1.0.7');
+
 // Настройки базы данных
 define('DB_HOST', 'localhost');
 define('DB_NAME', '');
@@ -35,7 +38,7 @@ define('ROLE_NURSE', 8);         // Медицинская сестра
 $ROLE_NAMES = array(
     ROLE_DOCTOR => 'Врач',
     ROLE_SISTER => 'Участковая сестра',
-    ROLE_NURSE  => 'Медицинская сестра',
+    ROLE_NURSE => 'Медицинская сестра',
 );
 
 // Интервал polling (в миллисекундах)
@@ -47,7 +50,8 @@ define('RECORDS_PER_PAGE', 20);
 /**
  * PDO подключение к БД
  */
-function getDB() {
+function getDB()
+{
     static $pdo = null;
     if ($pdo === null) {
         $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
@@ -63,7 +67,8 @@ function getDB() {
 /**
  * Запуск сессии
  */
-function initSession() {
+function initSession()
+{
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
@@ -72,7 +77,8 @@ function initSession() {
 /**
  * Проверка авторизации пользователя
  */
-function checkAuth() {
+function checkAuth()
+{
     initSession();
 
     if (isset($_SESSION['user'])) {
@@ -90,12 +96,12 @@ function checkAuth() {
                 $user = $stmt->fetch();
                 if ($user) {
                     $_SESSION['user'] = array(
-                        'id'         => $user['id'],
-                        'fio'        => $user['fio'],
-                        'level'      => (int)$user['level'],
+                        'id' => $user['id'],
+                        'fio' => $user['fio'],
+                        'level' => (int) $user['level'],
                         'policlinic' => $user['policlinic'],
-                        'area'       => isset($user['area']) ? $user['area'] : '',
-                        'doctor'     => isset($user['doctor']) ? $user['doctor'] : $user['fio'],
+                        'area' => isset($user['area']) ? $user['area'] : '',
+                        'doctor' => isset($user['doctor']) ? $user['doctor'] : $user['fio'],
                     );
                     return $_SESSION['user'];
                 }
@@ -109,16 +115,17 @@ function checkAuth() {
 /**
  * Установка авторизации
  */
-function setAuth($user) {
+function setAuth($user)
+{
     initSession();
 
     $_SESSION['user'] = array(
-        'id'         => $user['id'],
-        'fio'        => $user['fio'],
-        'level'      => (int)$user['level'],
+        'id' => $user['id'],
+        'fio' => $user['fio'],
+        'level' => (int) $user['level'],
         'policlinic' => $user['policlinic'],
-        'area'       => isset($user['area']) ? $user['area'] : '',
-        'doctor'     => isset($user['doctor']) ? $user['doctor'] : $user['fio'],
+        'area' => isset($user['area']) ? $user['area'] : '',
+        'doctor' => isset($user['doctor']) ? $user['doctor'] : $user['fio'],
     );
 
     $cookieData = base64_encode(json_encode(array(
@@ -132,7 +139,8 @@ function setAuth($user) {
 /**
  * Выход из системы
  */
-function logout() {
+function logout()
+{
     initSession();
     $_SESSION = array();
     session_destroy();
@@ -142,7 +150,8 @@ function logout() {
 /**
  * JSON ответ
  */
-function jsonResponse($data, $code = 200) {
+function jsonResponse($data, $code = 200)
+{
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($data, JSON_UNESCAPED_UNICODE);

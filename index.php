@@ -265,6 +265,7 @@
         <div class="polling-status" id="polling-status">
             <div class="polling-dot"></div>
             <span>Онлайн</span>
+            <span class="app-version">v<?php echo APP_VERSION; ?></span>
         </div>
     </div>
     

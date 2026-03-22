@@ -1129,6 +1129,12 @@ input, select, button, textarea {
     animation: none;
 }
 
+.app-version {
+    margin-left: 4px;
+    opacity: 0.5;
+    font-size: 0.625rem;
+}
+
 /* ==================== Responsive ==================== */
 @media (max-width: 768px) {
     .login-container {

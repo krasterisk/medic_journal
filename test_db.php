@@ -120,6 +120,6 @@ foreach ($roles as $level => $name) {
 
 // 8. Проверяем PHP версию
 echo "\n8. PHP: " . PHP_VERSION . "\n";
-echo "   Сервер: " . ($_SERVER['SERVER_SOFTWARE'] ?? 'неизвестно') . "\n";
+echo "   Сервер: " . (isset($_SERVER['SERVER_SOFTWARE']) ? $_SERVER['SERVER_SOFTWARE'] : 'неизвестно') . "\n";
 
 echo "\n=== Диагностика завершена ===\n";
