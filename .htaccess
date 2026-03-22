@@ -1,0 +1,65 @@
+# Меджурнал PWA - Apache Configuration
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Если файл существует — отдаём его напрямую
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+    
+    # Если директория существует — отдаём
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+    
+    # Всё остальное — на index.php
+    RewriteRule ^$ index.php [L]
+</IfModule>
+
+# Кеширование статических ресурсов
+<IfModule mod_expires.c>
+    ExpiresActive on
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType application/manifest+json "access plus 1 day"
+</IfModule>
+
+# Сжатие
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>
+
+# Заголовки безопасности
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # Service Worker scope
+    <FilesMatch "sw\.js$">
+        Header set Service-Worker-Allowed "/"
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+    
+    # Manifest
+    <FilesMatch "manifest\.json$">
+        Header set Content-Type "application/manifest+json"
+    </FilesMatch>
+</IfModule>
+
+# Запрет доступа к конфигурационным файлам
+<FilesMatch "(config\.php|push_sender\.php|generate_vapid_keys\.php|generate_icons\.php|\.ini|\.log|last_push_check\.txt)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# PHP настройки
+<IfModule mod_php5.c>
+    php_value session.cookie_httponly 1
+    php_value session.use_strict_mode 1
+</IfModule>
