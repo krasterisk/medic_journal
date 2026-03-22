@@ -661,6 +661,34 @@ input, select, button, textarea {
     color: var(--text-muted);
 }
 
+.record-actions {
+    padding-top: 10px;
+    margin-top: 10px;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-complete-inline {
+    width: 100%;
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: #fff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.btn-complete-inline:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 12px rgba(34, 197, 94, 0.4);
+}
+
+.btn-complete-inline:active {
+    transform: translateY(0);
+}
+
 .record-datetime {
     font-size: 0.75rem;
     color: var(--text-muted);

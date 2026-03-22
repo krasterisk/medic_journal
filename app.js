@@ -417,16 +417,39 @@ function calcAge(dateStr) {
     var d = new Date(dateStr);
     if (isNaN(d.getTime())) return '';
     var today = new Date();
-    var age = today.getFullYear() - d.getFullYear();
-    var m = today.getMonth() - d.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-    if (age < 0 || age > 150) return '';
+    
+    // Format date as DD.MM.YYYY
+    var dd = ('0' + d.getDate()).slice(-2);
+    var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+    var yyyy = d.getFullYear();
+    var dateFormatted = dd + '.' + mm + '.' + yyyy;
+    
+    // Calc years
+    var years = today.getFullYear() - d.getFullYear();
+    var mDiff = today.getMonth() - d.getMonth();
+    if (mDiff < 0 || (mDiff === 0 && today.getDate() < d.getDate())) years--;
+    if (years < 0 || years > 150) return dateFormatted;
+    
+    // Calc remaining days
+    var lastBirthday = new Date(today.getFullYear(), d.getMonth(), d.getDate());
+    if (lastBirthday > today) lastBirthday.setFullYear(lastBirthday.getFullYear() - 1);
+    var diffMs = today - lastBirthday;
+    var days = Math.floor(diffMs / 86400000);
+    
     // Russian declension
-    var mod10 = age % 10, mod100 = age % 100;
-    var word = 'лет';
-    if (mod10 === 1 && mod100 !== 11) word = 'год';
-    else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) word = 'года';
-    return age + ' ' + word;
+    function decl(n, one, two, five) {
+        var m10 = n % 10, m100 = n % 100;
+        if (m10 === 1 && m100 !== 11) return n + ' ' + one;
+        if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return n + ' ' + two;
+        return n + ' ' + five;
+    }
+    
+    var parts = [dateFormatted, '('];
+    parts.push(decl(years, 'год', 'года', 'лет'));
+    parts.push(', ');
+    parts.push(decl(days, 'день', 'дня', 'дней'));
+    parts.push(')');
+    return parts.join('');
 }
 
 function buildAddress(street, dom, kv) {
@@ -448,6 +471,7 @@ function renderRegistrationCard(r) {
     const statusText = r.reg_status || 'Новый';
     const age = calcAge(r.reg_dateofbirth);
     const addr = buildAddress(r.reg_address, r.reg_dom, r.reg_kv);
+    const showComplete = canComplete(r);
     
     return `
         <div class="record-card" data-id="${r.reg_id}">
@@ -480,7 +504,10 @@ function renderRegistrationCard(r) {
                     <span class="record-label">Статус</span>
                     <span class="record-status ${statusClass}">${esc(statusText)}</span>
                 </div>
-            </div>
+            </div>${showComplete ? `
+            <div class="record-actions">
+                <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_registrations" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">✅ Завершить вызов</button>
+            </div>` : ''}
         </div>`;
 }
 
@@ -489,6 +516,7 @@ function renderActiveCard(r) {
     const statusText = r.reg_status || '—';
     const age = calcAge(r.reg_dateofbirth);
     const addr = buildAddress(r.reg_street, r.reg_dom, r.reg_kv);
+    const showComplete = canComplete(r);
     
     return `
         <div class="record-card" data-id="${r.reg_id}">
@@ -517,7 +545,10 @@ function renderActiveCard(r) {
                     <span class="record-label">Статус</span>
                     <span class="record-status ${statusClass}">${esc(statusText)}</span>
                 </div>
-            </div>
+            </div>${showComplete ? `
+            <div class="record-actions">
+                <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_active" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">✅ Завершить вызов</button>
+            </div>` : ''}
         </div>`;
 }
 
@@ -566,6 +597,23 @@ function getStatusClass(status) {
     if (s.includes('ожид') || s.includes('wait')) return 'status-waiting';
     if (s.includes('актив') || s.includes('active')) return 'status-active';
     return 'status-new';
+}
+
+function canComplete(r) {
+    if (!state.user || state.user.level !== 1) return false;
+    var st = String(r.reg_status || '').toLowerCase();
+    return !st.includes('выполн') && !st.includes('done') && !st.includes('обслуж');
+}
+
+function inlineComplete(btn) {
+    state.completeTarget = {
+        reg_id: btn.dataset.regId,
+        fio: btn.dataset.fio,
+        table: btn.dataset.table,
+        tabName: state.currentTab,
+        existingDiagnoz: btn.dataset.diagnoz || '',
+    };
+    openDiagnozModal();
 }
 
 // ==================== RECORD DETAIL MODAL ====================
@@ -894,6 +942,15 @@ function updateBadges() {
     
     const total = registrations + active + sisters;
     setBadge('notification-badge', total);
+    
+    // Update app icon badge (PWA on Android)
+    if ('setAppBadge' in navigator) {
+        if (total > 0) {
+            navigator.setAppBadge(total).catch(function() {});
+        } else {
+            navigator.clearAppBadge().catch(function() {});
+        }
+    }
 }
 
 function setBadge(elementId, count) {
