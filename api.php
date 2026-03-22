@@ -435,6 +435,63 @@ function handlePollNew() {
         }
     }
 
+    // Get uncompleted counts for today
+    $today = date('Y-m-d');
+    $results['uncompleted_today'] = array(
+        'registrations' => 0,
+        'active' => 0,
+        'sisters' => 0
+    );
+    
+    // Registrations uncompleted today
+    $qReg = "SELECT COUNT(*) FROM gdb_registrations WHERE DATE(reg_datetime) = ? AND {$notCompletedSQL}";
+    $pReg = array($today);
+    if ($user['level'] == ROLE_DOCTOR) {
+        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
+        $qReg .= " AND reg_doctor LIKE ?";
+        $pReg[] = '%' . $doctorName . '%';
+    }
+    if (!empty($user['policlinic'])) {
+        $qReg .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+    }
+    $stmtReg = $db->prepare($qReg);
+    $stmtReg->execute($pReg);
+    $results['uncompleted_today']['registrations'] = (int)$stmtReg->fetchColumn();
+
+    // Active uncompleted today
+    $qAct = "SELECT COUNT(*) FROM gdb_active WHERE DATE(reg_datetime) = ? AND {$notCompletedSQL}";
+    $pAct = array($today);
+    if ($user['level'] == ROLE_DOCTOR) {
+        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
+        $qAct .= " AND reg_doctor LIKE ?";
+        $pAct[] = '%' . $doctorName . '%';
+    }
+    if (!empty($user['policlinic'])) {
+        $qAct .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+    }
+    $stmtAct = $db->prepare($qAct);
+    $stmtAct->execute($pAct);
+    $results['uncompleted_today']['active'] = (int)$stmtAct->fetchColumn();
+
+    // Sisters uncompleted today
+    $qSis = "SELECT COUNT(*) FROM gdb_sisters_journal WHERE DATE(reg_datetime) = ? AND reg_status = 0";
+    $pSis = array($today);
+    if ($user['level'] == ROLE_SISTER) {
+        $qSis .= " AND reg_sister LIKE ?";
+        $pSis[] = '%' . $user['fio'] . '%';
+    } elseif ($user['level'] == ROLE_DOCTOR) {
+        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
+        $qSis .= " AND (reg_creator LIKE ? OR reg_user LIKE ?)";
+        $pSis[] = '%' . $doctorName . '%';
+        $pSis[] = '%' . $doctorName . '%';
+    }
+    if (!empty($user['policlinic'])) {
+        $qSis .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+    }
+    $stmtSis = $db->prepare($qSis);
+    $stmtSis->execute($pSis);
+    $results['uncompleted_today']['sisters'] = (int)$stmtSis->fetchColumn();
+
     $results['has_new'] = ($results['registrations'] + $results['active'] + $results['sisters']) > 0;
 
     jsonResponse($results);

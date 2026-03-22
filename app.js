@@ -329,7 +329,7 @@ function switchTab(tabName) {
     });
     
     // Clear new count badge for this tab
-    state.newCounts[tabName] = 0;
+    // Not resetting badges anymore, they show daily uncompleted now
     updateBadges();
     
     // Load data
@@ -909,19 +909,15 @@ async function pollForNew() {
             // Check if we are already initialized
             const isInitialized = (state.lastIds.registrations > 0 || state.lastIds.active > 0 || state.lastIds.sisters > 0);
             
-            if (isInitialized && result.has_new) {
-                // Update counts
-                if (result.registrations > 0) {
-                    state.newCounts.registrations += result.registrations;
-                }
-                if (result.active > 0) {
-                    state.newCounts.active += result.active;
-                }
-                if (result.sisters > 0) {
-                    state.newCounts.sisters += result.sisters;
-                }
-                
+            // Sync overall uncompleted daily counts 
+            if (result.uncompleted_today) {
+                state.newCounts.registrations = result.uncompleted_today.registrations || 0;
+                state.newCounts.active = result.uncompleted_today.active || 0;
+                state.newCounts.sisters = result.uncompleted_today.sisters || 0;
                 updateBadges();
+            }
+            
+            if (isInitialized && result.has_new) {
                 
                 // Show toast, play sound, vibrate
                 const totalNew = result.registrations + result.active + result.sisters;
