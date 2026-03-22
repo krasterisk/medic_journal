@@ -11,7 +11,7 @@ const state = {
     user: null,
     currentTab: 'registrations',
     pages: { registrations: 1, active: 1, sisters: 1 },
-    lastCheck: null,
+    lastIds: { registrations: 0, active: 0, sisters: 0 },
     pollingTimer: null,
     pollingInterval: 30000, // 30 seconds — faster for HTTP mode
     newCounts: { registrations: 0, active: 0, sisters: 0 },
@@ -903,55 +903,59 @@ async function pollForNew() {
     if (!state.user || !navigator.onLine) return;
     
     try {
-        const result = await apiCall('poll_new', { last_check: state.lastCheck }, 'GET');
+        const result = await apiCall('poll_new', state.lastIds, 'GET');
         
-        if (result && result.has_new) {
-            // Update counts
-            if (result.registrations > 0) {
-                state.newCounts.registrations += result.registrations;
-            }
-            if (result.active > 0) {
-                state.newCounts.active += result.active;
-            }
-            if (result.sisters > 0) {
-                state.newCounts.sisters += result.sisters;
-            }
+        if (result && result.max_ids) {
+            // Check if we are already initialized
+            const isInitialized = (state.lastIds.registrations > 0 || state.lastIds.active > 0 || state.lastIds.sisters > 0);
             
-            updateBadges();
-            
-            // Show toast, play sound, vibrate
-            const totalNew = result.registrations + result.active + result.sisters;
-            if (totalNew > 0) {
-                showToast(
-                    '🆕 Новые записи',
-                    buildNewRecordMessage(result),
-                    () => {
-                        // Reload current tab
-                        loadTabData(state.currentTab);
+            if (isInitialized && result.has_new) {
+                // Update counts
+                if (result.registrations > 0) {
+                    state.newCounts.registrations += result.registrations;
+                }
+                if (result.active > 0) {
+                    state.newCounts.active += result.active;
+                }
+                if (result.sisters > 0) {
+                    state.newCounts.sisters += result.sisters;
+                }
+                
+                updateBadges();
+                
+                // Show toast, play sound, vibrate
+                const totalNew = result.registrations + result.active + result.sisters;
+                if (totalNew > 0) {
+                    showToast(
+                        '🆕 Новые записи',
+                        buildNewRecordMessage(result),
+                        () => {
+                            // Reload current tab
+                            loadTabData(state.currentTab);
+                        }
+                    );
+                    
+                    // Play notification sound
+                    playNotificationSound();
+                    
+                    // Vibrate phone
+                    vibratePhone();
+                    
+                    // Blink title if page is hidden
+                    if (document.hidden) {
+                        startTitleBlink(totalNew);
                     }
-                );
+                }
                 
-                // Play notification sound
-                playNotificationSound();
-                
-                // Vibrate phone
-                vibratePhone();
-                
-                // Blink title if page is hidden
-                if (document.hidden) {
-                    startTitleBlink(totalNew);
+                // Auto-reload current tab if on current day
+                const today = new Date().toISOString().slice(0, 10);
+                if (DOM.filterDateFrom.value === today && DOM.filterDateTo.value === today) {
+                    loadTabData(state.currentTab);
                 }
             }
             
-            // Auto-reload current tab if on current day
-            const today = new Date().toISOString().slice(0, 10);
-            if (DOM.filterDateFrom.value === today && DOM.filterDateTo.value === today) {
-                loadTabData(state.currentTab);
-            }
-        }
-        
-        if (result && result.server_time) {
-            state.lastCheck = result.server_time;
+            // Save max tracking IDs
+            state.lastIds = result.max_ids;
         }
     } catch (err) {
         console.error('Polling error:', err);
