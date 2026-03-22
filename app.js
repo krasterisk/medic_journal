@@ -569,7 +569,7 @@ function renderActiveCard(r) {
                 ` : ''}
             </div>${showComplete ? `
             <div class="record-actions">
-                <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_active" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">✅ Завершить вызов</button>
+                <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_active" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">✅ Завершить назначение</button>
             </div>` : ''}
         </div>`;
 }
@@ -740,7 +740,11 @@ function showRecordDetail(tabName, record) {
     
     if (showComplete) {
         DOM.modalFooter.classList.remove('hidden');
-        // Store current record info for complete action
+        if (tabName === 'active') {
+            DOM.btnCompleteCall.textContent = 'Завершить назначение';
+        } else {
+            DOM.btnCompleteCall.textContent = 'Завершить вызов';
+        }
         state.completeTarget = {
             reg_id: record.reg_id,
             fio: record.reg_fio,

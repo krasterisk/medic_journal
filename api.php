@@ -341,9 +341,13 @@ function handlePollNew() {
     $user = checkAuth();
     if (!$user) { jsonResponse(array('error' => 'Не авторизован'), 401); }
 
-    $lastCheckTime = _get('last_check', date('Y-m-d H:i:s', strtotime('-1 minute')));
-
     $db = getDB();
+
+    $lastCheckTime = _get('last_check');
+    if (!$lastCheckTime) {
+        $stmt = $db->query("SELECT DATE_SUB(NOW(), INTERVAL 1 MINUTE)");
+        $lastCheckTime = $stmt->fetchColumn();
+    }
     $results = array(
         'registrations' => 0,
         'active'        => 0,
@@ -421,7 +425,10 @@ function handlePollNew() {
         $results['new_records']['sisters'] = $stmt->fetchAll();
     }
 
-    $results['server_time'] = date('Y-m-d H:i:s');
+    $stmt = $db->query("SELECT NOW()");
+    $dbNow = $stmt->fetchColumn();
+    
+    $results['server_time'] = $dbNow ? $dbNow : date('Y-m-d H:i:s');
     $results['has_new'] = ($results['registrations'] + $results['active'] + $results['sisters']) > 0;
 
     jsonResponse($results);
