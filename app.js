@@ -600,7 +600,7 @@ function getStatusClass(status) {
 }
 
 function canComplete(r) {
-    if (!state.user || state.user.level !== 1) return false;
+    if (!state.user || state.user.level != 1) return false;
     var st = String(r.reg_status || '').toLowerCase();
     return !st.includes('выполн') && !st.includes('done') && !st.includes('обслуж');
 }
@@ -702,7 +702,7 @@ function showRecordDetail(tabName, record) {
     // Show "Complete call" button for doctors on registrations/active tabs
     // Hide if already completed
     var showComplete = false;
-    if (state.user && state.user.level === 1 && (tabName === 'registrations' || tabName === 'active')) {
+    if (state.user && state.user.level == 1 && (tabName === 'registrations' || tabName === 'active')) {
         var st = String(record.reg_status || '').toLowerCase();
         if (!st.includes('выполн') && !st.includes('done') && !st.includes('обслуж')) {
             showComplete = true;
