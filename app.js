@@ -504,6 +504,17 @@ function renderRegistrationCard(r) {
                     <span class="record-label">Статус</span>
                     <span class="record-status ${statusClass}">${esc(statusText)}</span>
                 </div>
+                ${isCompletedStatus(r.reg_status) ? `
+                <div class="record-field">
+                    <span class="record-label" style="color: var(--success); font-weight: 500;">✓ Выполнен</span>
+                    <span class="record-value">${formatDateTime(r.reg_donedate) || '—'}</span>
+                </div>
+                ${r.reg_diagnoz ? `
+                <div class="record-field">
+                    <span class="record-label">Диагноз</span>
+                    <span class="record-value" style="font-weight: 600; color: var(--success);">${esc(r.reg_diagnoz)}</span>
+                </div>` : ''}
+                ` : ''}
             </div>${showComplete ? `
             <div class="record-actions">
                 <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_registrations" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">✅ Завершить вызов</button>
@@ -545,6 +556,17 @@ function renderActiveCard(r) {
                     <span class="record-label">Статус</span>
                     <span class="record-status ${statusClass}">${esc(statusText)}</span>
                 </div>
+                ${isCompletedStatus(r.reg_status) ? `
+                <div class="record-field">
+                    <span class="record-label" style="color: var(--success); font-weight: 500;">✓ Выполнен</span>
+                    <span class="record-value">${formatDateTime(r.reg_donedate) || '—'}</span>
+                </div>
+                ${r.reg_diagnoz ? `
+                <div class="record-field">
+                    <span class="record-label">Диагноз</span>
+                    <span class="record-value" style="font-weight: 600; color: var(--success);">${esc(r.reg_diagnoz)}</span>
+                </div>` : ''}
+                ` : ''}
             </div>${showComplete ? `
             <div class="record-actions">
                 <button class="btn-complete-inline" data-reg-id="${r.reg_id}" data-fio="${esc(r.reg_fio)}" data-table="gdb_active" data-diagnoz="${esc(r.reg_diagnoz || '')}" onclick="event.stopPropagation(); inlineComplete(this)">✅ Завершить вызов</button>
@@ -600,12 +622,16 @@ function getStatusClass(status) {
     return 'status-new';
 }
 
+function isCompletedStatus(status) {
+    if (!status) return false;
+    var st = String(status).toLowerCase();
+    return !st.includes('не выполн') && !st.includes('не обслуж') && !st.includes('необслуж') && 
+           (st.includes('выполн') || st.includes('done') || st.includes('обслуж'));
+}
+
 function canComplete(r) {
     if (!state.user || state.user.level != 1) return false;
-    var st = String(r.reg_status || '').toLowerCase();
-    var isDone = !st.includes('не выполн') && !st.includes('не обслуж') && !st.includes('необслуж') && 
-                 (st.includes('выполн') || st.includes('done') || st.includes('обслуж'));
-    return !isDone;
+    return !isCompletedStatus(r.reg_status);
 }
 
 function inlineComplete(btn) {
@@ -707,10 +733,7 @@ function showRecordDetail(tabName, record) {
     // Hide if already completed
     var showComplete = false;
     if (state.user && state.user.level == 1 && (tabName === 'registrations' || tabName === 'active')) {
-        var st = String(record.reg_status || '').toLowerCase();
-        var isDone = !st.includes('не выполн') && !st.includes('не обслуж') && !st.includes('необслуж') && 
-                     (st.includes('выполн') || st.includes('done') || st.includes('обслуж'));
-        if (!isDone) {
+        if (!isCompletedStatus(record.reg_status)) {
             showComplete = true;
         }
     }
