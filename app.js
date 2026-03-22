@@ -593,6 +593,7 @@ function getStatusClass(status) {
     if (!status) return 'status-new';
     const s = String(status).toLowerCase();
     if (s.includes('отмен') || s.includes('cancel')) return 'status-cancelled';
+    if (s.includes('не выполн') || s.includes('не обслуж') || s.includes('необслуж')) return 'status-waiting';
     if (s.includes('выполн') || s.includes('done') || s.includes('обслуж')) return 'status-done';
     if (s.includes('ожид') || s.includes('wait')) return 'status-waiting';
     if (s.includes('актив') || s.includes('active')) return 'status-active';
@@ -602,7 +603,9 @@ function getStatusClass(status) {
 function canComplete(r) {
     if (!state.user || state.user.level != 1) return false;
     var st = String(r.reg_status || '').toLowerCase();
-    return !st.includes('выполн') && !st.includes('done') && !st.includes('обслуж');
+    var isDone = !st.includes('не выполн') && !st.includes('не обслуж') && !st.includes('необслуж') && 
+                 (st.includes('выполн') || st.includes('done') || st.includes('обслуж'));
+    return !isDone;
 }
 
 function inlineComplete(btn) {
@@ -704,7 +707,9 @@ function showRecordDetail(tabName, record) {
     var showComplete = false;
     if (state.user && state.user.level == 1 && (tabName === 'registrations' || tabName === 'active')) {
         var st = String(record.reg_status || '').toLowerCase();
-        if (!st.includes('выполн') && !st.includes('done') && !st.includes('обслуж')) {
+        var isDone = !st.includes('не выполн') && !st.includes('не обслуж') && !st.includes('необслуж') && 
+                     (st.includes('выполн') || st.includes('done') || st.includes('обслуж'));
+        if (!isDone) {
             showComplete = true;
         }
     }
