@@ -618,6 +618,7 @@ function inlineComplete(btn) {
     };
     openDiagnozModal();
 }
+window.inlineComplete = inlineComplete;
 
 // ==================== RECORD DETAIL MODAL ====================
 function showRecordDetail(tabName, record) {
