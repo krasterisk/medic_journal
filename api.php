@@ -8,6 +8,11 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
+// Security: prevent clickjacking and sniffing
+header('X-Frame-Options: DENY');
+header('X-Content-Type-Options: nosniff');
+header('X-XSS-Protection: 1; mode=block');
+
 // Ловим фатальные ошибки PHP и отдаём как JSON
 register_shutdown_function(function() {
     $error = error_get_last();
@@ -65,10 +70,9 @@ try {
             jsonResponse(array('error' => 'Неизвестное действие'), 400);
     }
 } catch (Exception $e) {
+    error_log('API error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
     jsonResponse(array(
-        'error' => 'Ошибка сервера: ' . $e->getMessage(),
-        'code'  => $e->getCode(),
-        'trace' => basename($e->getFile()) . ':' . $e->getLine(),
+        'error' => 'Ошибка сервера',
     ), 500);
 }
 
@@ -81,6 +85,48 @@ function _post($key, $default = '') {
 }
 function _arr($arr, $key, $default = '') {
     return isset($arr[$key]) ? $arr[$key] : $default;
+}
+
+/**
+ * Безопасная вставка policlinic IN (...) — только цифры и запятые
+ */
+function safePoliclinicIn($raw) {
+    if (empty($raw)) return '';
+    $ids = array_map('intval', preg_split('/\D+/', $raw));
+    $ids = array_filter($ids, function($v) { return $v > 0; });
+    if (empty($ids)) return '0';
+    return implode(',', $ids);
+}
+
+/**
+ * Rate limiting по IP (файловый)
+ * @return bool true если лимит превышен
+ */
+function isRateLimited($action, $maxAttempts = 10, $windowSeconds = 300) {
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : 'unknown';
+    $dir = sys_get_temp_dir() . '/medjournal_rate';
+    if (!is_dir($dir)) { @mkdir($dir, 0700, true); }
+    
+    $file = $dir . '/' . md5($ip . '_' . $action) . '.json';
+    $now = time();
+    $attempts = array();
+    
+    if (file_exists($file)) {
+        $data = json_decode(file_get_contents($file), true);
+        if (is_array($data)) {
+            $attempts = array_filter($data, function($t) use ($now, $windowSeconds) {
+                return ($now - $t) < $windowSeconds;
+            });
+        }
+    }
+    
+    if (count($attempts) >= $maxAttempts) {
+        return true;
+    }
+    
+    $attempts[] = $now;
+    file_put_contents($file, json_encode(array_values($attempts)));
+    return false;
 }
 
 // ====================== HANDLERS ======================
@@ -102,6 +148,11 @@ function handleGetUsersByRole() {
 }
 
 function handleLogin() {
+    // Rate limiting: max 5 login attempts per 5 minutes per IP
+    if (isRateLimited('login', 5, 300)) {
+        jsonResponse(array('error' => 'Слишком много попыток. Подождите 5 минут.'), 429);
+    }
+
     $userId   = (int)_post('user_id', 0);
     $password = _post('password', '');
 
@@ -109,17 +160,19 @@ function handleLogin() {
         jsonResponse(array('error' => 'Укажите пользователя и пароль'), 400);
     }
 
+    // Sanitize password length
+    if (strlen($password) > 255) {
+        jsonResponse(array('error' => 'Неверный пароль'), 401);
+    }
+
     $db = getDB();
     $stmt = $db->prepare('SELECT * FROM gdb_users WHERE id = ?');
     $stmt->execute(array($userId));
     $user = $stmt->fetch();
 
-    if (!$user) {
-        jsonResponse(array('error' => 'Пользователь не найден'), 404);
-    }
-
-    if ($user['password'] !== $password) {
-        jsonResponse(array('error' => 'Неверный пароль'), 401);
+    if (!$user || $user['password'] !== $password) {
+        // Same error for both: don't reveal if user exists
+        jsonResponse(array('error' => 'Неверные учётные данные'), 401);
     }
 
     $allowedRoles = array(ROLE_DOCTOR, ROLE_SISTER, ROLE_NURSE);
@@ -185,7 +238,7 @@ function handleGetRegistrations() {
     }
 
     if (!empty($user['policlinic'])) {
-        $where[] = 'reg_policlinic IN (' . $user['policlinic'] . ')';
+        $where[] = 'reg_policlinic IN (' . safePoliclinicIn($user['policlinic']) . ')';
     }
 
     $search = _get('search', '');
@@ -249,7 +302,7 @@ function handleGetActive() {
     }
 
     if (!empty($user['policlinic'])) {
-        $where[] = 'reg_policlinic IN (' . $user['policlinic'] . ')';
+        $where[] = 'reg_policlinic IN (' . safePoliclinicIn($user['policlinic']) . ')';
     }
 
     $search = _get('search', '');
@@ -313,7 +366,7 @@ function handleGetSistersJournal() {
     }
 
     if (!empty($user['policlinic'])) {
-        $where[] = 'reg_policlinic IN (' . $user['policlinic'] . ')';
+        $where[] = 'reg_policlinic IN (' . safePoliclinicIn($user['policlinic']) . ')';
     }
 
     if ($user['level'] == ROLE_SISTER) {
@@ -389,7 +442,7 @@ function handlePollNew() {
             $regParams[] = '%' . $doctorName . '%';
         }
         if (!empty($user['policlinic'])) {
-            $regWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+            $regWhere .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
         }
         $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_registrations WHERE {$regWhere}");
         $stmt->execute($regParams);
@@ -412,7 +465,7 @@ function handlePollNew() {
             $actParams[] = '%' . $doctorName . '%';
         }
         if (!empty($user['policlinic'])) {
-            $actWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+            $actWhere .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
         }
         $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_active WHERE {$actWhere}");
         $stmt->execute($actParams);
@@ -439,7 +492,7 @@ function handlePollNew() {
             $sisParams[] = '%' . $doctorName . '%';
         }
         if (!empty($user['policlinic'])) {
-            $sisWhere .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+            $sisWhere .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
         }
         $stmt = $db->prepare("SELECT COUNT(*) FROM gdb_sisters_journal WHERE {$sisWhere}");
         $stmt->execute($sisParams);
@@ -469,7 +522,7 @@ function handlePollNew() {
         $pReg[] = '%' . $doctorName . '%';
     }
     if (!empty($user['policlinic'])) {
-        $qReg .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+        $qReg .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
     }
     $stmtReg = $db->prepare($qReg);
     $stmtReg->execute($pReg);
@@ -484,7 +537,7 @@ function handlePollNew() {
         $pAct[] = '%' . $doctorName . '%';
     }
     if (!empty($user['policlinic'])) {
-        $qAct .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+        $qAct .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
     }
     $stmtAct = $db->prepare($qAct);
     $stmtAct->execute($pAct);
@@ -503,7 +556,7 @@ function handlePollNew() {
         $pSis[] = '%' . $doctorName . '%';
     }
     if (!empty($user['policlinic'])) {
-        $qSis .= " AND reg_policlinic IN (" . $user['policlinic'] . ")";
+        $qSis .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
     }
     $stmtSis = $db->prepare($qSis);
     $stmtSis->execute($pSis);
