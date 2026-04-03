@@ -61,8 +61,14 @@ foreach ($subscriptions as $sub) {
         $params = [$lastCheck];
         
         if ($level == ROLE_DOCTOR) {
-            $where .= " AND reg_doctor LIKE ?";
-            $params[] = '%' . $doctorName . '%';
+            if ($doctorName !== $fio) {
+                $where .= " AND (reg_doctor LIKE ? OR reg_doctor LIKE ?)";
+                $params[] = '%' . $doctorName . '%';
+                $params[] = '%' . $fio . '%';
+            } else {
+                $where .= " AND reg_doctor LIKE ?";
+                $params[] = '%' . $doctorName . '%';
+            }
         }
         if (!empty($policlinic)) {
             $where .= " AND reg_policlinic IN ({$policlinic})";
@@ -84,8 +90,14 @@ foreach ($subscriptions as $sub) {
         $params = [$lastCheck];
         
         if ($level == ROLE_DOCTOR) {
-            $where .= " AND reg_doctor LIKE ?";
-            $params[] = '%' . $doctorName . '%';
+            if ($doctorName !== $fio) {
+                $where .= " AND (reg_doctor LIKE ? OR reg_doctor LIKE ?)";
+                $params[] = '%' . $doctorName . '%';
+                $params[] = '%' . $fio . '%';
+            } else {
+                $where .= " AND reg_doctor LIKE ?";
+                $params[] = '%' . $doctorName . '%';
+            }
         }
         if (!empty($policlinic)) {
             $where .= " AND reg_policlinic IN ({$policlinic})";
@@ -110,9 +122,14 @@ foreach ($subscriptions as $sub) {
             $where .= " AND reg_sister LIKE ?";
             $params[] = '%' . $fio . '%';
         } elseif ($level == ROLE_DOCTOR) {
-            $where .= " AND (reg_creator LIKE ? OR reg_user LIKE ?)";
-            $params[] = '%' . $doctorName . '%';
-            $params[] = '%' . $doctorName . '%';
+            $orParts = array();
+            $orParts[] = 'reg_creator LIKE ?'; $params[] = '%' . $fio . '%';
+            $orParts[] = 'reg_user LIKE ?';    $params[] = '%' . $fio . '%';
+            if ($doctorName !== $fio) {
+                $orParts[] = 'reg_creator LIKE ?'; $params[] = '%' . $doctorName . '%';
+                $orParts[] = 'reg_user LIKE ?';    $params[] = '%' . $doctorName . '%';
+            }
+            $where .= ' AND (' . implode(' OR ', $orParts) . ')';
         }
         if (!empty($policlinic)) {
             $where .= " AND reg_policlinic IN ({$policlinic})";

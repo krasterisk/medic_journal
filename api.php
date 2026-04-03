@@ -99,6 +99,46 @@ function safePoliclinicIn($raw) {
 }
 
 /**
+ * Добавить фильтр по врачу к WHERE/params.
+ * Ищет по обоим полям (doctor и fio), если они различаются.
+ * @param string $column  Имя столбца для LIKE (например 'reg_doctor')
+ * @param array  $user    Данные пользователя из сессии
+ * @param array  &$where  Массив условий WHERE (для implode)
+ * @param array  &$params Массив параметров для prepared statement
+ */
+function addDoctorFilter($column, $user, &$where, &$params) {
+    $doctor = isset($user['doctor']) ? trim($user['doctor']) : '';
+    $fio    = trim($user['fio']);
+    if ($doctor !== '' && $doctor !== $fio) {
+        $where[]  = '(' . $column . ' LIKE ? OR ' . $column . ' LIKE ?)';
+        $params[] = '%' . $doctor . '%';
+        $params[] = '%' . $fio . '%';
+    } else {
+        $name = $doctor !== '' ? $doctor : $fio;
+        $where[]  = $column . ' LIKE ?';
+        $params[] = '%' . $name . '%';
+    }
+}
+
+/**
+ * Добавить фильтр по врачу для inline SQL строк (poll_new / uncompleted).
+ * @return string  SQL-фрагмент вида " AND reg_doctor LIKE ?" или " AND (... OR ...)"
+ */
+function addDoctorFilterInline($column, $user, &$params) {
+    $doctor = isset($user['doctor']) ? trim($user['doctor']) : '';
+    $fio    = trim($user['fio']);
+    if ($doctor !== '' && $doctor !== $fio) {
+        $params[] = '%' . $doctor . '%';
+        $params[] = '%' . $fio . '%';
+        return " AND (" . $column . " LIKE ? OR " . $column . " LIKE ?)";
+    } else {
+        $name = $doctor !== '' ? $doctor : $fio;
+        $params[] = '%' . $name . '%';
+        return " AND " . $column . " LIKE ?";
+    }
+}
+
+/**
  * Rate limiting по IP (файловый)
  * @return bool true если лимит превышен
  */
@@ -232,9 +272,7 @@ function handleGetRegistrations() {
     $params[] = $dateTo;
 
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-        $where[] = 'reg_doctor LIKE ?';
-        $params[] = '%' . $doctorName . '%';
+        addDoctorFilter('reg_doctor', $user, $where, $params);
     }
 
     if (!empty($user['policlinic'])) {
@@ -272,34 +310,12 @@ function handleGetRegistrations() {
     $ucStmt->execute($params);
     $uncompleted = (int)$ucStmt->fetchColumn();
 
-    // === TEMP DEBUG: remove after fixing ===
-    $debug = array();
-    $debug['user_level'] = $user['level'];
-    $debug['user_fio'] = $user['fio'];
-    $debug['user_doctor'] = isset($user['doctor']) ? $user['doctor'] : '(not set)';
-    $debug['filter_doctor_name'] = ($user['level'] == ROLE_DOCTOR)
-        ? (!empty($user['doctor']) ? $user['doctor'] : $user['fio'])
-        : '(not doctor role)';
-    $debug['user_policlinic'] = $user['policlinic'];
-    $debug['where_sql'] = implode(' AND ', $where);
-
-    // Sample actual reg_doctor values from DB for today
-    $sampleStmt = $db->prepare("SELECT DISTINCT reg_doctor FROM gdb_registrations WHERE DATE(reg_datetime) = ? LIMIT 10");
-    $sampleStmt->execute(array($dateFrom));
-    $debug['sample_reg_doctors_in_db'] = $sampleStmt->fetchAll(PDO::FETCH_COLUMN);
-
-    // Sample policlinics in DB for today
-    $samplePol = $db->prepare("SELECT DISTINCT reg_policlinic FROM gdb_registrations WHERE DATE(reg_datetime) = ? LIMIT 10");
-    $samplePol->execute(array($dateFrom));
-    $debug['sample_policlinics_in_db'] = $samplePol->fetchAll(PDO::FETCH_COLUMN);
-
     jsonResponse(array(
         'records' => $records,
         'total'   => $total,
         'page'    => $page,
         'pages'   => (int)ceil($total / $limit),
         'uncompleted' => $uncompleted,
-        '_debug'  => $debug,
     ));
 }
 
@@ -318,9 +334,7 @@ function handleGetActive() {
     $params[] = $dateTo;
 
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-        $where[] = 'reg_doctor LIKE ?';
-        $params[] = '%' . $doctorName . '%';
+        addDoctorFilter('reg_doctor', $user, $where, $params);
     }
 
     if (!empty($user['policlinic'])) {
@@ -381,10 +395,18 @@ function handleGetSistersJournal() {
         $params[] = '%' . $user['fio'] . '%';
     }
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-        $where[] = '(reg_creator LIKE ? OR reg_user LIKE ?)';
-        $params[] = '%' . $doctorName . '%';
-        $params[] = '%' . $doctorName . '%';
+        $doctor = isset($user['doctor']) ? trim($user['doctor']) : '';
+        $fio    = trim($user['fio']);
+        $names  = array($fio);
+        if ($doctor !== '' && $doctor !== $fio) { $names[] = $doctor; }
+        $orParts = array();
+        foreach ($names as $n) {
+            $orParts[] = 'reg_creator LIKE ?';
+            $params[]  = '%' . $n . '%';
+            $orParts[] = 'reg_user LIKE ?';
+            $params[]  = '%' . $n . '%';
+        }
+        $where[] = '(' . implode(' OR ', $orParts) . ')';
     }
 
     if (!empty($user['policlinic'])) {
@@ -459,9 +481,7 @@ function handlePollNew() {
         $regWhere  = "reg_id > ? AND reg_id <= ? AND {$notCompletedSQL}";
         $regParams = array($lastReg, $results['max_ids']['registrations']);
         if ($user['level'] == ROLE_DOCTOR) {
-            $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-            $regWhere .= " AND reg_doctor LIKE ?";
-            $regParams[] = '%' . $doctorName . '%';
+            $regWhere .= addDoctorFilterInline('reg_doctor', $user, $regParams);
         }
         if (!empty($user['policlinic'])) {
             $regWhere .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
@@ -482,9 +502,7 @@ function handlePollNew() {
         $actWhere  = "reg_id > ? AND reg_id <= ? AND {$notCompletedSQL}";
         $actParams = array($lastAct, $results['max_ids']['active']);
         if ($user['level'] == ROLE_DOCTOR) {
-            $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-            $actWhere .= " AND reg_doctor LIKE ?";
-            $actParams[] = '%' . $doctorName . '%';
+            $actWhere .= addDoctorFilterInline('reg_doctor', $user, $actParams);
         }
         if (!empty($user['policlinic'])) {
             $actWhere .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
@@ -508,10 +526,16 @@ function handlePollNew() {
             $sisWhere .= " AND reg_sister LIKE ?";
             $sisParams[] = '%' . $user['fio'] . '%';
         } elseif ($user['level'] == ROLE_DOCTOR) {
-            $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-            $sisWhere .= " AND (reg_creator LIKE ? OR reg_user LIKE ?)";
-            $sisParams[] = '%' . $doctorName . '%';
-            $sisParams[] = '%' . $doctorName . '%';
+            $doctor = isset($user['doctor']) ? trim($user['doctor']) : '';
+            $fio    = trim($user['fio']);
+            $orParts = array();
+            $orParts[] = 'reg_creator LIKE ?'; $sisParams[] = '%' . $fio . '%';
+            $orParts[] = 'reg_user LIKE ?';    $sisParams[] = '%' . $fio . '%';
+            if ($doctor !== '' && $doctor !== $fio) {
+                $orParts[] = 'reg_creator LIKE ?'; $sisParams[] = '%' . $doctor . '%';
+                $orParts[] = 'reg_user LIKE ?';    $sisParams[] = '%' . $doctor . '%';
+            }
+            $sisWhere .= ' AND (' . implode(' OR ', $orParts) . ')';
         }
         if (!empty($user['policlinic'])) {
             $sisWhere .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
@@ -539,9 +563,7 @@ function handlePollNew() {
     $qReg = "SELECT COUNT(*) FROM gdb_registrations WHERE DATE(reg_datetime) = ? AND {$notCompletedSQL}";
     $pReg = array($today);
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-        $qReg .= " AND reg_doctor LIKE ?";
-        $pReg[] = '%' . $doctorName . '%';
+        $qReg .= addDoctorFilterInline('reg_doctor', $user, $pReg);
     }
     if (!empty($user['policlinic'])) {
         $qReg .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
@@ -554,9 +576,7 @@ function handlePollNew() {
     $qAct = "SELECT COUNT(*) FROM gdb_active WHERE DATE(reg_datetime) = ? AND {$notCompletedSQL}";
     $pAct = array($today);
     if ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-        $qAct .= " AND reg_doctor LIKE ?";
-        $pAct[] = '%' . $doctorName . '%';
+        $qAct .= addDoctorFilterInline('reg_doctor', $user, $pAct);
     }
     if (!empty($user['policlinic'])) {
         $qAct .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
@@ -572,10 +592,16 @@ function handlePollNew() {
         $qSis .= " AND reg_sister LIKE ?";
         $pSis[] = '%' . $user['fio'] . '%';
     } elseif ($user['level'] == ROLE_DOCTOR) {
-        $doctorName = !empty($user['doctor']) ? $user['doctor'] : $user['fio'];
-        $qSis .= " AND (reg_creator LIKE ? OR reg_user LIKE ?)";
-        $pSis[] = '%' . $doctorName . '%';
-        $pSis[] = '%' . $doctorName . '%';
+        $doctor = isset($user['doctor']) ? trim($user['doctor']) : '';
+        $fio    = trim($user['fio']);
+        $orParts = array();
+        $orParts[] = 'reg_creator LIKE ?'; $pSis[] = '%' . $fio . '%';
+        $orParts[] = 'reg_user LIKE ?';    $pSis[] = '%' . $fio . '%';
+        if ($doctor !== '' && $doctor !== $fio) {
+            $orParts[] = 'reg_creator LIKE ?'; $pSis[] = '%' . $doctor . '%';
+            $orParts[] = 'reg_user LIKE ?';    $pSis[] = '%' . $doctor . '%';
+        }
+        $qSis .= ' AND (' . implode(' OR ', $orParts) . ')';
     }
     if (!empty($user['policlinic'])) {
         $qSis .= " AND reg_policlinic IN (" . safePoliclinicIn($user['policlinic']) . ")";
