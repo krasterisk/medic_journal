@@ -272,12 +272,34 @@ function handleGetRegistrations() {
     $ucStmt->execute($params);
     $uncompleted = (int)$ucStmt->fetchColumn();
 
+    // === TEMP DEBUG: remove after fixing ===
+    $debug = array();
+    $debug['user_level'] = $user['level'];
+    $debug['user_fio'] = $user['fio'];
+    $debug['user_doctor'] = isset($user['doctor']) ? $user['doctor'] : '(not set)';
+    $debug['filter_doctor_name'] = ($user['level'] == ROLE_DOCTOR)
+        ? (!empty($user['doctor']) ? $user['doctor'] : $user['fio'])
+        : '(not doctor role)';
+    $debug['user_policlinic'] = $user['policlinic'];
+    $debug['where_sql'] = implode(' AND ', $where);
+
+    // Sample actual reg_doctor values from DB for today
+    $sampleStmt = $db->prepare("SELECT DISTINCT reg_doctor FROM gdb_registrations WHERE DATE(reg_datetime) = ? LIMIT 10");
+    $sampleStmt->execute(array($dateFrom));
+    $debug['sample_reg_doctors_in_db'] = $sampleStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    // Sample policlinics in DB for today
+    $samplePol = $db->prepare("SELECT DISTINCT reg_policlinic FROM gdb_registrations WHERE DATE(reg_datetime) = ? LIMIT 10");
+    $samplePol->execute(array($dateFrom));
+    $debug['sample_policlinics_in_db'] = $samplePol->fetchAll(PDO::FETCH_COLUMN);
+
     jsonResponse(array(
         'records' => $records,
         'total'   => $total,
         'page'    => $page,
         'pages'   => (int)ceil($total / $limit),
         'uncompleted' => $uncompleted,
+        '_debug'  => $debug,
     ));
 }
 
