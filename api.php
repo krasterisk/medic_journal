@@ -687,18 +687,21 @@ function handleCompleteCall() {
     $db = getDB();
     $now = date('Y-m-d H:i:s');
 
+    // Пробуем обновить с reg_donedate; если столбца нет — повторяем без него
     try {
         $stmt = $db->prepare(
             "UPDATE {$table} SET reg_diagnoz = ?, reg_status = ?, reg_donedate = ? WHERE reg_id = ?"
         );
         $stmt->execute(array($diagnoz, 'Выполнено', $now, $regId));
-    } catch (Exception $e) {
-        jsonResponse(array(
-            'error' => 'Ошибка при обновлении записи',
-            '_debug' => $e->getMessage(),
-            '_table' => $table,
-            '_reg_id' => $regId,
-        ), 500);
+    } catch (PDOException $e) {
+        if (strpos($e->getMessage(), 'reg_donedate') !== false) {
+            $stmt = $db->prepare(
+                "UPDATE {$table} SET reg_diagnoz = ?, reg_status = ? WHERE reg_id = ?"
+            );
+            $stmt->execute(array($diagnoz, 'Выполнено', $regId));
+        } else {
+            throw $e;
+        }
     }
 
     if ($stmt->rowCount() === 0) {
