@@ -687,10 +687,19 @@ function handleCompleteCall() {
     $db = getDB();
     $now = date('Y-m-d H:i:s');
 
-    $stmt = $db->prepare(
-        "UPDATE {$table} SET reg_diagnoz = ?, reg_status = ?, reg_donedate = ? WHERE reg_id = ?"
-    );
-    $stmt->execute(array($diagnoz, 'Выполнено', $now, $regId));
+    try {
+        $stmt = $db->prepare(
+            "UPDATE {$table} SET reg_diagnoz = ?, reg_status = ?, reg_donedate = ? WHERE reg_id = ?"
+        );
+        $stmt->execute(array($diagnoz, 'Выполнено', $now, $regId));
+    } catch (Exception $e) {
+        jsonResponse(array(
+            'error' => 'Ошибка при обновлении записи',
+            '_debug' => $e->getMessage(),
+            '_table' => $table,
+            '_reg_id' => $regId,
+        ), 500);
+    }
 
     if ($stmt->rowCount() === 0) {
         jsonResponse(array('error' => 'Запись не найдена'), 404);
